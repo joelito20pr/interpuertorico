@@ -143,29 +143,28 @@
   <div class="modal-content">
     <span class="close" onclick="closeForm()">&times;</span>
     <h3>Formulario de Auspicio</h3>
-    <form onsubmit="return handleSubmit(event)" enctype="multipart/form-data">
-      <div id="processingMsg" style="display:none; font-weight: bold; color: #0a66c2; margin-bottom: 1rem;">Procesando tu solicitud...</div>
+    <form id="sponsorForm" enctype="multipart/form-data">
+  <div id="processingMsg" style="display:none; font-weight: bold; color: #0a66c2; margin-bottom: 1rem;">
+    Procesando tu solicitud...
+  </div>
 
-      <label for="name">Nombre completo</label>
-      <input type="text" id="name" name="name" required>
+  <label for="name">Nombre completo</label>
+  <input type="text" id="name" name="name" required>
 
-      <label for="email">Correo electrónico</label>
-      <input type="email" id="email" name="email" required>
+  <label for="email">Correo electrónico</label>
+  <input type="email" id="email" name="email" required>
 
-      <label for="business">Nombre del negocio (opcional)</label>
-      <input type="text" id="business" name="business">
+  <label for="business">Nombre del negocio (opcional)</label>
+  <input type="text" id="business" name="business">
 
-      <label for="logo">Subir logo (opcional)</label>
-      <input type="file" id="logo" name="logo" accept="image/*">
+  <label for="logo">Subir logo (opcional)</label>
+  <input type="file" id="logo" name="logo" accept="image/*">
 
-      <label for="tier">Nivel seleccionado</label>
-      <input type="text" id="tier" name="tier" readonly>
+  <label for="tier">Nivel seleccionado</label>
+  <input type="text" id="tier" name="tier" readonly>
 
-      <input type="hidden" name="_subject" value="Nuevo auspicio desde la web">
-      <input type="hidden" name="_next" value="https://interpuertorico.com/gracias.html">
-
-      <input type="submit" value="Continuar al Pago">
-    </form>
+  <input type="submit" value="Continuar al Pago">
+</form>
   </div>
 </div>
 
@@ -177,23 +176,36 @@ function openForm(tier) {
 function closeForm() {
   document.getElementById("formModal").style.display = "none";
 }
-function handleSubmit(event) {
+document.getElementById("sponsorForm").addEventListener("submit", function (event) {
   event.preventDefault();
-  const tier = document.getElementById("tier").value;
-  let url = "";
+
+  const form = event.target;
+  const formData = new FormData(form);
+  const tier = formData.get("tier");
+
+  let stripeURL = "";
   if (tier === "Principal - $600") {
-    url = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
+    stripeURL = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
   } else if (tier === "Plata - $300") {
-    url = "https://buy.stripe.com/test_9AQbKGgXQ5pRglW5kl";
+    stripeURL = "https://buy.stripe.com/test_9AQbKGgXQ5pRglW5kl";
   } else if (tier === "Amigo - $150") {
-    url = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
+    stripeURL = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
   }
 
   document.getElementById("processingMsg").style.display = "block";
-  document.querySelector("form").submit();
-  setTimeout(() => { window.location.href = url }, 1500);
-  return false;
-}
+
+  fetch("https://formspree.io/f/mblogjoz", {
+    method: "POST",
+    body: formData,
+    headers: { 'Accept': 'application/json' }
+  })
+  .then(() => {
+    window.location.href = stripeURL;
+  })
+  .catch(() => {
+    alert("Error enviando el formulario.");
+  });
+});
 </script>
 </body>
 </html>
