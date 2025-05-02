@@ -102,7 +102,7 @@ export default function Home() {
               <div className="flex flex-col items-center text-center">
                 <CalendarDays className="h-10 w-10 text-cyan-600 mb-2" />
                 <h3 className="text-lg font-semibold">Fecha del Evento</h3>
-                <p>31 julio - 3 agosto, 2024</p>
+                <p>31 julio - 3 agosto, 2025</p>
               </div>
               <div className="flex flex-col items-center text-center">
                 <MapPin className="h-10 w-10 text-cyan-600 mb-2" />
