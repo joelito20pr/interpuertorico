@@ -128,14 +128,9 @@ export default function Home() {
       <section className="w-full py-16 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center gap-12">
-            <div className="md:w-1/2">
-              <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-xl">
-                <Image
-                  src="/placeholder.svg?height=600&width=800"
-                  alt="Niños jugando futsal"
-                  fill
-                  className="object-cover"
-                />
+            <div className="md:w-1/2 flex justify-center">
+              <div className="w-64 h-64 relative">
+                <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
               </div>
             </div>
             <div className="md:w-1/2">
@@ -257,8 +252,9 @@ export default function Home() {
               <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
             </div>
           </div>
-          <p>© 2025 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
+          <p>© 2024 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
           <p className="mt-2 text-sm text-gray-400">
+            Organización sin fines de lucro dedicada al desarrollo deportivo de jóvenes
           </p>
         </div>
       </footer>

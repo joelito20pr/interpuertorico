@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Inter Puerto Rico Futsal - Patrocinios",
   description: "Apoya a nuestro equipo de futsal en el Futsal International Championship 2024",
+  icons: {
+    icon: "/favicon.ico",
+  },
     generator: 'v0.dev'
 }
 
