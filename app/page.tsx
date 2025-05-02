@@ -82,7 +82,7 @@ export default function Home() {
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center">Inter Puerto Rico Futsal</h1>
           <p className="text-xl mb-8 text-center max-w-3xl">
-            Apoya a nuestro equipo de futsal de niños de 11 años en su camino al Futsal International Championship 2024
+            Apoya a nuestro equipo de futsal de niños de 11 años en su camino al Futsal International Championship 2025
           </p>
           <Button
             size="lg"
@@ -252,9 +252,8 @@ export default function Home() {
               <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
             </div>
           </div>
-          <p>© 2024 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
+          <p>© 2025 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
           <p className="mt-2 text-sm text-gray-400">
-            Organización sin fines de lucro dedicada al desarrollo deportivo de jóvenes
           </p>
         </div>
       </footer>
