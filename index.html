@@ -4,9 +4,196 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Auspicio Inter Puerto Rico</title>
-  <!-- Estilos y fuentes aquí -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; background: #f4f4f4; color: #333; }
+    .container { max-width: 800px; margin: auto; padding: 2rem; background: #fff; }
+    h1, h2 { color: #0a0a0a; }
+    .logo { text-align: center; margin-bottom: 1rem; }
+    .logo img { max-width: 150px; }
+    .tier { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; }
+    .tier h3 { margin-top: 0; }
+    .button {
+      display: inline-block;
+      background: #0a66c2;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 5px;
+      text-decoration: none;
+      margin-top: 1rem;
+      cursor: pointer;
+    }
+    .contact { margin-top: 2rem; text-align: center; font-size: 0.95rem; color: #666; }
+    .modal[style*="display: block"] .modal-content {
+      transform: scale(1.05);
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    .modal-content {
+      transition: transform 0.3s ease;
+      transform: scale(1);
+      background: #fff;
+      padding: 2rem;
+      max-width: 500px;
+      margin: 10% auto;
+      border-radius: 8px;
+      position: relative;
+    }
+    .close {
+      position: absolute;
+      top: 10px; right: 15px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+      input[type="text"], input[type="email"], input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    label {
+      margin-top: 10px;
+      margin-bottom: 5px;
+      font-weight: 600;
+      display: block;
+    }
+    input[type="submit"] {
+      margin-top: 15px;
+      background-color: #0a66c2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      .tier { padding: 1rem 0.5rem; }
+      .modal-content { width: 90%; margin: 20% auto; padding: 1rem; }
+      input, label, input[type="submit"] { font-size: 1rem; }
+      .button { padding: 8px 16px; font-size: 1rem; text-align: center; display: block; width: 100%; }
+    }
+</style>
+  
 </head>
 <body>
-  <!-- El contenido completo del HTML que vimos anteriormente -->
+  <div class="container">
+    <div class="logo">
+      <img src="logointerpr.png" alt="Inter Puerto Rico logo">
+    </div>
+    <h1>Inter Puerto Rico U11 - Torneo Internacional</h1>
+    <p>
+      Inter Puerto Rico es un equipo de futsal compuesto por niños de 11 años. Nuestro objetivo es representar con orgullo a nuestra comunidad en un prestigioso torneo internacional que se celebrará del 31 de julio al 3 de agosto en el Centro de Convenciones de Puerto Rico.
+      <br><br>
+      Somos una organización sin fines de lucro, cuyo único propósito es el desarrollo deportivo, educativo y emocional de los jóvenes participantes. No buscamos beneficios económicos, sino brindarles una experiencia de vida enriquecedora a través del deporte.
+      <br><br>
+      Estamos buscando auspiciadores que nos ayuden a cubrir los costos de participación del equipo y se unan a esta iniciativa de impacto comunitario.
+    </p>
+
+    <div class="tier">
+      <h3>Principal - $600</h3>
+      <ul>
+        <li>Logo grande al frente del uniforme</li>
+        <li>Mención destacada en redes</li>
+        <li>Reconocimiento como auspiciador principal</li>
+      </ul>
+      <div class="button" onclick="openForm('Principal - $600')">Auspiciar con $600</div>
+    </div>
+
+    <div class="tier">
+      <h3>Plata - $300</h3>
+      <ul>
+        <li>Logo mediano en parte trasera</li>
+        <li>Mención en redes</li>
+      </ul>
+      <div class="button" onclick="openForm('Plata - $300')">Auspiciar con $300</div>
+    </div>
+
+    <div class="tier">
+      <h3>Amigo - $150</h3>
+      <ul>
+        <li>Mención especial de agradecimiento</li>
+        <li>No incluye logo en uniforme</li>
+      </ul>
+      <div class="button" onclick="openForm('Amigo - $150')">Auspiciar con $150</div>
+    </div>
+
+    <div class="tier">
+      <h3>Donación libre</h3>
+      <ul>
+        <li>Apoya con cualquier cantidad</li>
+        <li>No incluye beneficios promocionales</li>
+      </ul>
+      <a class="button" href="https://buy.stripe.com/test_4gw6qmgXQcSj2v6fZ1" target="_blank">Donar libremente</a>
+    </div>
+
+    <div class="contact">
+      <p>Contacto: Inter Puerto Rico &bull; 787-688-2181 &bull; interprfc@gmail.com</p>
+    </div>
+</div>
+
+<div class="modal" id="formModal">
+  <div class="modal-content">
+    <span class="close" onclick="closeForm()">&times;</span>
+    <h3>Formulario de Auspicio</h3>
+    <form onsubmit="return handleSubmit(event)" enctype="multipart/form-data">
+      <div id="processingMsg" style="display:none; font-weight: bold; color: #0a66c2; margin-bottom: 1rem;">Procesando tu solicitud...</div>
+
+      <label for="name">Nombre completo</label>
+      <input type="text" id="name" name="name" required>
+
+      <label for="email">Correo electrónico</label>
+      <input type="email" id="email" name="email" required>
+
+      <label for="business">Nombre del negocio (opcional)</label>
+      <input type="text" id="business" name="business">
+
+      <label for="logo">Subir logo (opcional)</label>
+      <input type="file" id="logo" name="logo" accept="image/*">
+
+      <label for="tier">Nivel seleccionado</label>
+      <input type="text" id="tier" name="tier" readonly>
+
+      <input type="hidden" name="_subject" value="Nuevo auspicio desde la web">
+      <input type="hidden" name="_next" value="https://interpuertorico.com/gracias.html">
+
+      <input type="submit" value="Continuar al Pago">
+    </form>
+  </div>
+</div>
+
+<script>
+function openForm(tier) {
+  document.getElementById("formModal").style.display = "block";
+  document.getElementById("tier").value = tier;
+}
+function closeForm() {
+  document.getElementById("formModal").style.display = "none";
+}
+function handleSubmit(event) {
+  event.preventDefault();
+  const tier = document.getElementById("tier").value;
+  let url = "";
+  if (tier === "Principal - $600") {
+    url = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
+  } else if (tier === "Plata - $300") {
+    url = "https://buy.stripe.com/test_9AQbKGgXQ5pRglW5kl";
+  } else if (tier === "Amigo - $150") {
+    url = "https://buy.stripe.com/test_6oE6qm370aKb1r2eUU";
+  }
+
+  document.getElementById("processingMsg").style.display = "block";
+  document.querySelector("form").submit();
+  setTimeout(() => { window.location.href = url }, 1500);
+  return false;
+}
+</script>
 </body>
 </html>
