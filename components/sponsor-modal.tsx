@@ -73,27 +73,26 @@ export default function SponsorModal({ isOpen, onClose, selectedTierId, tiers }:
 
     setIsSubmitting(true)
 
-    const tierName = selectedTier ? selectedTier.name : "Donación"
-    const tierAmount = isDonationTier ? amount : selectedTier?.price
-
-    // Crear un objeto FormData para enviar a Formspark
-    const formData = new FormData()
-    formData.append("Nivel de Patrocinio", tierName)
-    formData.append("Monto", tierAmount || "")
-    formData.append("Nombre", name)
-    formData.append("Empresa", companyName)
-    formData.append("Email", email)
-    formData.append("Teléfono", phone)
-    formData.append("Mensaje", message)
-
     try {
-      // Enviar datos a Formspark
+      // Crear un objeto con los datos del formulario
+      const formData = {
+        nivel_patrocinio: selectedTier?.name || "Donación",
+        monto: isDonationTier ? amount : selectedTier?.price || "",
+        nombre: name,
+        empresa: companyName,
+        email: email,
+        telefono: phone,
+        mensaje: message,
+      }
+
+      // Enviar datos a Formspark usando JSON en lugar de FormData
       const response = await fetch("https://submit-form.com/Ybp7V89H6", {
         method: "POST",
-        body: formData,
         headers: {
+          "Content-Type": "application/json",
           Accept: "application/json",
         },
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
@@ -111,6 +110,7 @@ export default function SponsorModal({ isOpen, onClose, selectedTierId, tiers }:
         throw new Error("Error al enviar el formulario")
       }
     } catch (error) {
+      console.error("Error en el envío del formulario:", error)
       toast({
         title: "Error",
         description: "Hubo un problema al enviar el formulario. Por favor, intenta de nuevo.",
