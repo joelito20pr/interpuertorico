@@ -59,24 +59,26 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
     const tierName = selectedTierObj ? selectedTierObj.name : "Donación"
     const tierAmount = selectedTier === "tier4" ? amount : selectedTierObj?.price
 
-    // Crear un objeto FormData para enviar a Formspree
-    const formData = new FormData()
-    formData.append("Nivel de Patrocinio", tierName)
-    formData.append("Monto", tierAmount || "")
-    formData.append("Nombre", name)
-    formData.append("Empresa", companyName)
-    formData.append("Email", email)
-    formData.append("Teléfono", phone)
-    formData.append("Mensaje", message)
-
     try {
-      // Enviar datos a Formspark
+      // Crear un objeto con los datos del formulario
+      const formData = {
+        nivel_patrocinio: tierName,
+        monto: tierAmount || "",
+        nombre: name,
+        empresa: companyName,
+        email: email,
+        telefono: phone,
+        mensaje: message,
+      }
+
+      // Enviar datos a Formspark usando JSON
       const response = await fetch("https://submit-form.com/Ybp7V89H6", {
         method: "POST",
-        body: formData,
         headers: {
+          "Content-Type": "application/json",
           Accept: "application/json",
         },
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
@@ -94,6 +96,7 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
         throw new Error("Error al enviar el formulario")
       }
     } catch (error) {
+      console.error("Error en el envío del formulario:", error)
       toast({
         title: "Error",
         description: "Hubo un problema al enviar el formulario. Por favor, intenta de nuevo.",
