@@ -65,24 +65,59 @@ export default function SponsorModal({ isOpen, onClose, selectedTierId, tiers }:
     }
   }
 
-  // Función simplificada que solo recopila datos y redirige a Stripe
-  const handleSubmit = (e: React.FormEvent) => {
+  // Función que envía datos a Formspark y luego redirige a Stripe
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!selectedTier) return
 
     setIsSubmitting(true)
 
-    // Mostrar mensaje de redirección
-    toast({
-      title: "Procesando tu patrocinio",
-      description: "Redirigiendo al proceso de pago...",
-    })
+    const tierName = selectedTier ? selectedTier.name : "Donación"
+    const tierAmount = isDonationTier ? amount : selectedTier?.price
 
-    // Redirigir a Stripe después de un breve retraso
-    setTimeout(() => {
-      goToStripe()
-    }, 1000)
+    // Crear un objeto FormData para enviar a Formspark
+    const formData = new FormData()
+    formData.append("Nivel de Patrocinio", tierName)
+    formData.append("Monto", tierAmount || "")
+    formData.append("Nombre", name)
+    formData.append("Empresa", companyName)
+    formData.append("Email", email)
+    formData.append("Teléfono", phone)
+    formData.append("Mensaje", message)
+
+    try {
+      // Enviar datos a Formspark
+      const response = await fetch("https://submit-form.com/Ybp7V89H6", {
+        method: "POST",
+        body: formData,
+        headers: {
+          Accept: "application/json",
+        },
+      })
+
+      if (response.ok) {
+        // Mostrar mensaje de redirección
+        toast({
+          title: "Procesando tu patrocinio",
+          description: "Redirigiendo al proceso de pago...",
+        })
+
+        // Redirigir a Stripe después de un breve retraso
+        setTimeout(() => {
+          goToStripe()
+        }, 1000)
+      } else {
+        throw new Error("Error al enviar el formulario")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Hubo un problema al enviar el formulario. Por favor, intenta de nuevo.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+    }
   }
 
   // Renderizar un formulario diferente según el tier seleccionado
