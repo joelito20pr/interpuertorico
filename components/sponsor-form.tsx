@@ -70,8 +70,8 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
     formData.append("Mensaje", message)
 
     try {
-      // Enviar datos a Formspree
-      const response = await fetch("https://formspree.io/f/mblogjoz", {
+      // Enviar datos a Formspark
+      const response = await fetch("https://submit-form.com/Ybp7V89H6", {
         method: "POST",
         body: formData,
         headers: {
