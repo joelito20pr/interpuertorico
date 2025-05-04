@@ -1,10 +1,7 @@
-/* SponsorForm.tsx
-   Inter Puerto Rico – formulario de patrocinio
-   Versión actualizada para enviar a Formspark (JSON) y redirigir a Stripe
-*/
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,13 +9,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/hooks/use-toast"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
@@ -38,8 +29,6 @@ interface SponsorFormProps {
   tiers: SponsorTier[]
 }
 
-const FORMSPARK_ENDPOINT = "https://submit-form.com/Ybp7V89H6"
-
 export default function SponsorForm({ tiers }: SponsorFormProps) {
   const [selectedTier, setSelectedTier] = useState<string>("")
   const [name, setName] = useState<string>("")
@@ -51,100 +40,101 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [step, setStep] = useState<number>(1)
 
-  /* ---------- helpers ---------- */
-
   const handleTierSelect = (tierId: string) => {
     setSelectedTier(tierId)
-    // “Donación libre” (tier4) muestra el input de monto
-    setStep(tierId === "tier4" ? 1.5 : 2)
+    // Si es donación libre, mostrar campo de monto
+    if (tierId === "tier4") {
+      setStep(1.5)
+    } else {
+      setStep(2)
+    }
   }
 
-  const goBack = () => {
-    if (step === 1.5) setStep(1)
-    else if (step === 2) setStep(selectedTier === "tier4" ? 1.5 : 1)
-  }
-
-  const goDirectlyToStripe = () => {
-    const tier = tiers.find((t) => t.id === selectedTier)
-    if (tier) window.location.href = tier.stripeLink
-  }
-
-  /* ---------- submit ---------- */
-
+  // Simplificar la función handleSubmit para evitar errores
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    const tierObj = tiers.find((t) => t.id === selectedTier)
-    const tierName = tierObj ? tierObj.name : "Donación"
-    const tierAmount = selectedTier === "tier4" ? amount : tierObj?.price
+    const selectedTierObj = tiers.find((tier) => tier.id === selectedTier)
+    const tierName = selectedTierObj ? selectedTierObj.name : "Donación"
+    const tierAmount = selectedTier === "tier4" ? amount : selectedTierObj?.price
+
+    // Crear un objeto FormData para enviar a Formspree
+    const formData = new FormData()
+    formData.append("Nivel de Patrocinio", tierName)
+    formData.append("Monto", tierAmount || "")
+    formData.append("Nombre", name)
+    formData.append("Empresa", companyName)
+    formData.append("Email", email)
+    formData.append("Teléfono", phone)
+    formData.append("Mensaje", message)
 
     try {
-      const res = await fetch(FORMSPARK_ENDPOINT, {
+      // Enviar datos a Formspree
+      const response = await fetch("https://formspree.io/f/mblogjoz", {
         method: "POST",
+        body: formData,
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          // Formspark reconoce “email” y “message”
-          email,
-          message,
-          tier: tierName,
-          amount: tierAmount,
-          name,
-          companyName,
-          phone,
-        }),
       })
 
-      if (!res.ok) throw new Error("Formspark error")
+      if (response.ok) {
+        toast({
+          title: "¡Formulario enviado!",
+          description: `Gracias ${name || "por tu patrocinio"}. Te redirigiremos al pago.`,
+        })
 
-      toast({
-        title: "¡Formulario enviado!",
-        description: `Gracias ${name || "por tu patrocinio"}. Te redirigiremos al pago.`,
-      })
-
-      setStep(3)
-
-      setTimeout(() => {
-        window.location.href = tierObj?.stripeLink || "/"
-      }, 1500)
-    } catch {
+        // Redirigir a Stripe después de un breve retraso
+        setTimeout(() => {
+          // Redirigir al enlace de Stripe correspondiente
+          window.location.href = selectedTierObj?.stripeLink || ""
+        }, 1500)
+      } else {
+        throw new Error("Error al enviar el formulario")
+      }
+    } catch (error) {
       toast({
         title: "Error",
-        description:
-          "Hubo un problema al enviar el formulario. Por favor, intenta de nuevo.",
+        description: "Hubo un problema al enviar el formulario. Por favor, intenta de nuevo.",
         variant: "destructive",
       })
       setIsSubmitting(false)
     }
   }
 
-  /* ---------- UI ---------- */
+  // Función para ir directamente a Stripe sin enviar el formulario
+  const goDirectlyToStripe = () => {
+    const selectedTierObj = tiers.find((tier) => tier.id === selectedTier)
+    if (selectedTierObj) {
+      window.location.href = selectedTierObj.stripeLink
+    }
+  }
+
+  const goBack = () => {
+    if (step === 1.5) {
+      setStep(1)
+    } else if (step === 2) {
+      if (selectedTier === "tier4") {
+        setStep(1.5)
+      } else {
+        setStep(1)
+      }
+    }
+  }
 
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle>Formulario de Patrocinio</CardTitle>
-        <CardDescription>
-          Completa la información para procesar tu patrocinio
-        </CardDescription>
+        <CardDescription>Completa la información para procesar tu patrocinio</CardDescription>
       </CardHeader>
-
       <CardContent>
-        {/* Paso 1 – elegir tier */}
         {step === 1 && (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="tier-select">
-                Selecciona tu nivel de patrocinio
-              </Label>
-              <RadioGroup
-                value={selectedTier}
-                onValueChange={handleTierSelect}
-                className="mt-2 space-y-3"
-              >
+              <Label htmlFor="tier-select">Selecciona tu nivel de patrocinio</Label>
+              <RadioGroup value={selectedTier} onValueChange={handleTierSelect} className="mt-2 space-y-3">
                 {tiers.map((tier) => (
                   <div key={tier.id} className="flex items-center space-x-2">
                     <RadioGroupItem value={tier.id} id={tier.id} />
@@ -152,9 +142,7 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
                       <span className="font-medium">
                         {tier.name} - {tier.price}
                       </span>
-                      <span className="text-sm text-gray-500">
-                        {tier.description}
-                      </span>
+                      <span className="text-sm text-gray-500">{tier.description}</span>
                     </Label>
                   </div>
                 ))}
@@ -163,7 +151,6 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
           </div>
         )}
 
-        {/* Paso 1.5 – monto libre */}
         {step === 1.5 && (
           <div className="space-y-4">
             <div>
@@ -191,15 +178,13 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
           </div>
         )}
 
-        {/* Paso 2 – datos del patrocinador */}
         {step === 2 && (
           <form onSubmit={handleSubmit} className="space-y-4">
             {(selectedTier === "tier1" || selectedTier === "tier2") && (
               <Alert className="bg-blue-50 border-blue-200 mb-4">
                 <AlertCircle className="h-4 w-4 text-blue-600" />
                 <AlertDescription className="text-blue-800">
-                  Por favor, envía tu logo en alta calidad a{" "}
-                  <strong>interprfc@gmail.com</strong> para incluirlo en el
+                  Por favor, envía tu logo en alta calidad a <strong>interprfc@gmail.com</strong> para incluirlo en el
                   uniforme.
                 </AlertDescription>
               </Alert>
@@ -212,7 +197,6 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Tu nombre completo"
-                required
               />
             </div>
 
@@ -234,7 +218,6 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
-                required
               />
             </div>
 
@@ -282,17 +265,19 @@ export default function SponsorForm({ tiers }: SponsorFormProps) {
           </form>
         )}
 
-        {/* Paso 3 – agradecimiento */}
         {step === 3 && (
           <div className="text-center py-8">
-            <h3 className="text-2xl font-bold text-green-600 mb-4">
-              ¡Gracias por tu patrocinio!
-            </h3>
-            <p className="mb-6">
-              Hemos recibido tu información y serás redirigido al proceso de
-              pago.
-            </p>
-            <Button onClick={goDirectlyToStripe}>Proceder al Pago</Button>
+            <h3 className="text-2xl font-bold text-green-600 mb-4">¡Gracias por tu patrocinio!</h3>
+            <p className="mb-6">Hemos recibido tu información y serás redirigido al proceso de pago.</p>
+            <Button
+              onClick={() => {
+                // Redirigir al enlace de Stripe correspondiente
+                const selectedTierObj = tiers.find((tier) => tier.id === selectedTier)
+                window.location.href = selectedTierObj?.stripeLink || ""
+              }}
+            >
+              Proceder al Pago
+            </Button>
           </div>
         )}
       </CardContent>
