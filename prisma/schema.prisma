@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Event {
+  id              String         @id @default(cuid())
+  title           String
+  description     String
+  date            DateTime
+  location        String
+  requiresPayment Boolean        @default(false)
+  price           String?
+  stripeLink      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  registrations   Registration[]
+}
+
+model Member {
+  id           String         @id @default(cuid())
+  name         String
+  parentName   String
+  email        String
+  phone        String
+  previousClub String?
+  group        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  registrations Registration[]
+}
+
+model Registration {
+  id        String   @id @default(cuid())
+  eventId   String
+  memberId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, memberId])
+}
