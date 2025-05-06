@@ -14,6 +14,7 @@ model User {
   password      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  posts         Post[]
 }
 
 model Event {
@@ -31,16 +32,23 @@ model Event {
 }
 
 model Member {
-  id           String         @id @default(cuid())
-  name         String
-  parentName   String
-  email        String
-  phone        String
-  previousClub String?
-  group        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  registrations Registration[]
+  id             String         @id @default(cuid())
+  name           String
+  parentName     String
+  email          String
+  phone          String
+  previousClub   String?
+  group          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  registrations  Registration[]
+  teamId         String?
+  isPlayer       Boolean        @default(true)
+  isParent       Boolean        @default(false)
+  relatedMemberId String?
+  password       String?
+  team           Team?          @relation(fields: [teamId], references: [id])
+  comments       Comment[]
 }
 
 model Registration {
@@ -53,4 +61,40 @@ model Registration {
   member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, memberId])
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  name        String
+  category    String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  members     Member[]
+  posts       Post[]
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  title     String
+  content   String
+  authorId  String
+  teamId    String?
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  comments  Comment[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    Member   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }

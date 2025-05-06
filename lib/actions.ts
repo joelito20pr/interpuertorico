@@ -241,7 +241,7 @@ export async function addTeamMember(data: {
 
     // Si no existe, crear un nuevo miembro
     if (!member) {
-      const memberData = {
+      const memberData: any = {
         name: data.name,
         parentName: data.parentName,
         email: data.email,
@@ -255,7 +255,7 @@ export async function addTeamMember(data: {
       // Si se va a crear una cuenta, añadir contraseña
       if (data.createAccount && data.password) {
         const hashedPassword = await hash(data.password, 10)
-        Object.assign(memberData, { password: hashedPassword })
+        memberData.password = hashedPassword
       }
 
       member = await db.member.create({
@@ -263,7 +263,7 @@ export async function addTeamMember(data: {
       })
     } else {
       // Si ya existe, actualizar sus datos
-      const memberData = {
+      const memberData: any = {
         name: data.name,
         parentName: data.parentName,
         phone: data.phone,
@@ -276,7 +276,7 @@ export async function addTeamMember(data: {
       // Si se va a crear una cuenta, añadir contraseña
       if (data.createAccount && data.password) {
         const hashedPassword = await hash(data.password, 10)
-        Object.assign(memberData, { password: hashedPassword })
+        memberData.password = hashedPassword
       }
 
       member = await db.member.update({
