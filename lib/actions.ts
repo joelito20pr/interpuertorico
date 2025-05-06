@@ -2,11 +2,10 @@
 
 import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
-import { hash } from "bcrypt"
+import { hash, compare } from "bcryptjs" // Cambiado de bcrypt a bcryptjs
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { cookies } from "next/headers"
-import { compare } from "bcrypt"
 
 // Acciones para eventos
 export async function createEvent(eventData: {
