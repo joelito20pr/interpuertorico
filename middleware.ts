@@ -5,6 +5,16 @@ export function middleware(request: NextRequest) {
   const authCookie = request.cookies.get("auth_user_id")
   const path = request.nextUrl.pathname
 
+  // Allow access to API routes
+  if (path.startsWith("/api/")) {
+    return NextResponse.next()
+  }
+
+  // Allow access to public event pages
+  if (path.startsWith("/eventos/")) {
+    return NextResponse.next()
+  }
+
   // Permitir acceso a la página principal y a la página de auspiciadores sin autenticación
   if (path === "/" || path.startsWith("/auspiciadores") || path.startsWith("/patrocinadores")) {
     return NextResponse.next()

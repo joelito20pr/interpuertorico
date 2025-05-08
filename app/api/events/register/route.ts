@@ -1,8 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sendFreeNotification } from "@/lib/free-notification-service"
+import { handleCors, withCors } from "@/lib/api-utils"
 
 export async function POST(request: NextRequest) {
+  // Handle CORS preflight requests
+  const corsResponse = handleCors(request)
+  if (corsResponse) return corsResponse
+
   try {
     console.log("Processing registration request")
     const data = await request.json()
@@ -17,12 +22,14 @@ export async function POST(request: NextRequest) {
         hasName: !!data.name,
         hasEmail: !!data.email,
       })
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Se requieren los campos: ID del evento, nombre y correo electrónico",
-        },
-        { status: 400 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Se requieren los campos: ID del evento, nombre y correo electrónico",
+          },
+          { status: 400 },
+        ),
       )
     }
 
@@ -30,12 +37,14 @@ export async function POST(request: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(data.email)) {
       console.error("Invalid email format:", data.email)
-      return NextResponse.json(
-        {
-          success: false,
-          message: "El formato del correo electrónico no es válido",
-        },
-        { status: 400 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "El formato del correo electrónico no es válido",
+          },
+          { status: 400 },
+        ),
       )
     }
 
@@ -48,12 +57,14 @@ export async function POST(request: NextRequest) {
 
     if (event.length === 0) {
       console.error("Event not found:", data.eventId)
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Evento no encontrado",
-        },
-        { status: 404 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Evento no encontrado",
+          },
+          { status: 404 },
+        ),
       )
     }
 
@@ -62,12 +73,14 @@ export async function POST(request: NextRequest) {
     // Check if event is public
     if (!selectedEvent.isPublic) {
       console.error("Attempted registration for private event:", data.eventId)
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Este evento no está abierto para registro público",
-        },
-        { status: 403 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Este evento no está abierto para registro público",
+          },
+          { status: 403 },
+        ),
       )
     }
 
@@ -85,12 +98,14 @@ export async function POST(request: NextRequest) {
           maxAttendees: selectedEvent.maxAttendees,
           currentCount: currentAttendees[0].count,
         })
-        return NextResponse.json(
-          {
-            success: false,
-            message: "El evento ha alcanzado el número máximo de participantes",
-          },
-          { status: 409 },
+        return withCors(
+          NextResponse.json(
+            {
+              success: false,
+              message: "El evento ha alcanzado el número máximo de participantes",
+            },
+            { status: 409 },
+          ),
         )
       }
     }
@@ -108,12 +123,14 @@ export async function POST(request: NextRequest) {
         eventId: data.eventId,
         email: data.email,
       })
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Este correo electrónico ya está registrado para este evento",
-        },
-        { status: 409 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Este correo electrónico ya está registrado para este evento",
+          },
+          { status: 409 },
+        ),
       )
     }
 
@@ -169,13 +186,15 @@ export async function POST(request: NextRequest) {
       console.log("Registration successful:", registrationId)
     } catch (error) {
       console.error("Error inserting registration:", error)
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Error al guardar el registro",
-          error: error instanceof Error ? error.message : String(error),
-        },
-        { status: 500 },
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al guardar el registro",
+            error: error instanceof Error ? error.message : String(error),
+          },
+          { status: 500 },
+        ),
       )
     }
 
@@ -205,22 +224,32 @@ export async function POST(request: NextRequest) {
       notificationResult = { success: false, error: String(error) }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Registro completado con éxito",
-      registrationId,
-      notificationSent: notificationResult?.success || false,
-      whatsappLink: notificationResult?.whatsappLink || null,
-    })
+    // At the end, wrap the response with CORS headers
+    return withCors(
+      NextResponse.json({
+        success: true,
+        message: "Registro completado con éxito",
+        registrationId,
+        notificationSent: notificationResult?.success || false,
+        whatsappLink: notificationResult?.whatsappLink || null,
+      }),
+    )
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Error en el proceso de registro",
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
+    return withCors(
+      NextResponse.json(
+        {
+          success: false,
+          message: "Error en el proceso de registro",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      ),
     )
   }
+}
+
+// Add OPTIONS method handler for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return handleCors(request) || new NextResponse(null, { status: 200 })
 }
