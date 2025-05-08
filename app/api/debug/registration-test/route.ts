@@ -1,92 +1,92 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Check if EventRegistration table exists
-    const tableCheck = await db`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'EventRegistration'
-      ) as exists
+    const tables = await db`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name = 'EventRegistration'
     `
 
-    const tableExists = tableCheck[0]?.exists || false
+    const tableExists = tables.length > 0
 
-    // Get table structure
-    let tableStructure = null
+    // If table exists, check its structure
+    let columns = []
     if (tableExists) {
-      tableStructure = await db`
+      columns = await db`
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns
-        WHERE table_name = 'EventRegistration'
+        WHERE table_schema = 'public'
+        AND table_name = 'EventRegistration'
         ORDER BY ordinal_position
       `
     }
 
-    // Test a dummy insert (but rollback)
-    let insertTest = { success: false, error: null }
-
-    if (tableExists) {
-      try {
-        // Start transaction
-        await db`BEGIN`
-
-        // Test insert
-        const testResult = await db`
-          INSERT INTO "EventRegistration" (
-            id, name, email, "eventId", "numberOfAttendees", "paymentStatus", "createdAt"
-          ) VALUES (
-            'test_reg_id', 'Test Name', 'test@example.com', 'test_event_id', 1, 'TEST', NOW()
-          )
-          RETURNING id
-        `
-
-        // Rollback - we don't want to actually insert this test data
-        await db`ROLLBACK`
-
-        insertTest = { success: true, result: testResult }
-      } catch (error) {
-        // Ensure rollback
-        await db`ROLLBACK`
-
-        insertTest = {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-      }
-    }
-
-    // Test event existence
-    const eventCheck = await db`
-      SELECT id, title, "isPublic", "shareableSlug"
-      FROM "Event"
-      LIMIT 5
+    // Check if Event table exists and its structure
+    const eventTables = await db`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      AND table_name = 'Event'
     `
 
+    const eventTableExists = eventTables.length > 0
+
+    // If Event table exists, check its structure
+    let eventColumns = []
+    if (eventTableExists) {
+      eventColumns = await db`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'Event'
+        ORDER BY ordinal_position
+      `
+    }
+
+    // Test environment variables
+    const envVars = {
+      FREE_EMAIL_SERVICE: !!process.env.FREE_EMAIL_SERVICE,
+      FREE_EMAIL_USER: !!process.env.FREE_EMAIL_USER,
+      FREE_EMAIL_PASS: !!process.env.FREE_EMAIL_PASS,
+      FREE_EMAIL_FROM: !!process.env.FREE_EMAIL_FROM,
+      ENABLE_WHATSAPP_LINKS: process.env.ENABLE_WHATSAPP_LINKS,
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    }
+
+    // Test event data
+    const publicEvents = await db`
+      SELECT id, title, "shareableSlug", "maxAttendees"
+      FROM "Event"
+      WHERE "isPublic" = true
+      LIMIT 5
+    `.catch((e) => {
+      return { error: e.message }
+    })
+
     return NextResponse.json({
-      success: true,
-      tableExists,
-      tableStructure,
-      insertTest,
-      sampleEvents: eventCheck,
-      env: {
-        hasDbUrl: !!process.env.DATABASE_URL,
-        hasEmailConfig: !!(
-          process.env.FREE_EMAIL_SERVICE &&
-          process.env.FREE_EMAIL_USER &&
-          process.env.FREE_EMAIL_PASS
-        ),
-        baseUrl: process.env.NEXT_PUBLIC_APP_URL || "not set",
+      status: "success",
+      eventRegistration: {
+        tableExists,
+        columns,
       },
+      event: {
+        tableExists: eventTableExists,
+        columns: eventColumns,
+      },
+      environmentVariables: envVars,
+      publicEvents,
     })
   } catch (error) {
-    console.error("Error in registration test:", error)
+    console.error("Registration test error:", error)
     return NextResponse.json(
       {
-        success: false,
-        error: "Error testing registration",
-        details: error instanceof Error ? error.message : String(error),
+        status: "error",
+        message: "Failed to perform registration test",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )

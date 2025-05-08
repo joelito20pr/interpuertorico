@@ -1,217 +1,224 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sendFreeNotification } from "@/lib/free-notification-service"
 
-export async function POST(request: Request) {
-  console.log("Registration request received")
-
+export async function POST(request: NextRequest) {
   try {
+    console.log("Processing registration request")
     const data = await request.json()
+
+    // Log registration attempt
     console.log("Registration data:", JSON.stringify(data))
 
-    const { name, guardianName, email, phone, eventId, numberOfAttendees = 1 } = data
-
-    // Validar datos requeridos
-    if (!name || !email || !eventId) {
-      console.log("Missing required fields:", { name, email, eventId })
+    // Validate required fields
+    if (!data.eventId || !data.name || !data.email) {
+      console.error("Missing required fields:", {
+        hasEventId: !!data.eventId,
+        hasName: !!data.name,
+        hasEmail: !!data.email,
+      })
       return NextResponse.json(
         {
           success: false,
-          error: "Faltan datos requeridos",
-          details: { name: !name, email: !email, eventId: !eventId },
+          message: "Se requieren los campos: ID del evento, nombre y correo electrónico",
         },
         { status: 400 },
       )
     }
 
-    // Verificar si el evento existe y está disponible para registro
-    console.log("Checking event existence:", eventId)
-    const eventResult = await db`
-      SELECT id, title, date, location, "maxAttendees", "shareableSlug" as slug, "isPublic"
-      FROM "Event"
-      WHERE id = ${eventId}
-    `
-    console.log("Event query result:", JSON.stringify(eventResult))
-
-    if (!eventResult || eventResult.length === 0) {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(data.email)) {
+      console.error("Invalid email format:", data.email)
       return NextResponse.json(
         {
           success: false,
-          error: "Evento no encontrado",
+          message: "El formato del correo electrónico no es válido",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Check if event exists and is open for registration
+    const event = await db`
+      SELECT id, title, date, location, "maxAttendees", "isPublic", "shareableSlug"
+      FROM "Event"
+      WHERE id = ${data.eventId}
+    `
+
+    if (event.length === 0) {
+      console.error("Event not found:", data.eventId)
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Evento no encontrado",
         },
         { status: 404 },
       )
     }
 
+    const selectedEvent = event[0]
+
     // Check if event is public
-    const event = eventResult[0]
-    if (event.isPublic !== true) {
+    if (!selectedEvent.isPublic) {
+      console.error("Attempted registration for private event:", data.eventId)
       return NextResponse.json(
         {
           success: false,
-          error: "Este evento no está disponible para registro público",
+          message: "Este evento no está abierto para registro público",
         },
         { status: 403 },
       )
     }
 
-    // Verificar si hay cupo disponible
-    if (event.maxAttendees) {
-      console.log("Checking available spots. Max:", event.maxAttendees)
-      const registrationsCount = await db`
+    // Check if event has reached max attendees
+    if (selectedEvent.maxAttendees) {
+      const currentAttendees = await db`
         SELECT COUNT(*) as count
         FROM "EventRegistration"
-        WHERE "eventId" = ${eventId}
+        WHERE "eventId" = ${data.eventId}
       `
-      console.log("Current registrations:", registrationsCount)
 
-      const currentCount = Number.parseInt(registrationsCount[0]?.count || "0")
-
-      if (currentCount + numberOfAttendees > event.maxAttendees) {
+      if (currentAttendees[0].count >= selectedEvent.maxAttendees) {
+        console.error("Event has reached maximum attendees:", {
+          eventId: data.eventId,
+          maxAttendees: selectedEvent.maxAttendees,
+          currentCount: currentAttendees[0].count,
+        })
         return NextResponse.json(
           {
             success: false,
-            error: "No hay suficientes cupos disponibles para este evento",
-            details: { current: currentCount, requested: numberOfAttendees, max: event.maxAttendees },
+            message: "El evento ha alcanzado el número máximo de participantes",
           },
-          { status: 400 },
+          { status: 409 },
         )
       }
     }
 
-    // Verificar si el correo ya está registrado para este evento
-    console.log("Checking for existing registration", { email, eventId })
+    // Check if this email is already registered for this event
     const existingRegistration = await db`
-      SELECT id FROM "EventRegistration"
-      WHERE "eventId" = ${eventId} AND email = ${email}
+      SELECT id
+      FROM "EventRegistration"
+      WHERE "eventId" = ${data.eventId}
+      AND email = ${data.email}
     `
-    console.log("Existing registration check result:", existingRegistration)
 
-    if (existingRegistration && existingRegistration.length > 0) {
+    if (existingRegistration.length > 0) {
+      console.error("Email already registered for this event:", {
+        eventId: data.eventId,
+        email: data.email,
+      })
       return NextResponse.json(
         {
           success: false,
-          error: "Este correo electrónico ya está registrado para este evento",
+          message: "Este correo electrónico ya está registrado para este evento",
         },
-        { status: 400 },
+        { status: 409 },
       )
     }
 
-    // Obtener esquema de la tabla para verificar columnas
-    console.log("Checking table schema")
-    const tableInfo = await db`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'EventRegistration'
-    `
-    const columns = tableInfo.map((col) => col.column_name)
-    console.log("Table columns:", columns)
+    // Generate a unique ID for the registration
+    const registrationId = `reg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-    const hasGuardianNameColumn = columns.includes("guardianName")
-    console.log("Has guardianName column:", hasGuardianNameColumn)
+    // Check if the table has guardianName column before attempting to insert
+    const hasGuardianNameColumn = await db`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = 'EventRegistration'
+      AND column_name = 'guardianName'
+    `.catch((e) => {
+      console.error("Error checking guardianName column:", e)
+      return []
+    })
 
-    // Crear el registro
-    const registrationId = `reg_${Date.now()}`
-
-    let registrationResult
-    if (hasGuardianNameColumn) {
-      console.log("Inserting registration with guardianName")
-      registrationResult = await db`
-        INSERT INTO "EventRegistration" (
-          id, name, "guardianName", email, phone, "eventId", "numberOfAttendees", "paymentStatus", "createdAt"
-        ) VALUES (
-          ${registrationId},
-          ${name},
-          ${guardianName || null},
-          ${email},
-          ${phone || null},
-          ${eventId},
-          ${numberOfAttendees},
-          'PENDING',
-          NOW()
-        )
-        RETURNING id
-      `
-    } else {
-      console.log("Inserting registration without guardianName")
-      registrationResult = await db`
-        INSERT INTO "EventRegistration" (
-          id, name, email, phone, "eventId", "numberOfAttendees", "paymentStatus", "createdAt"
-        ) VALUES (
-          ${registrationId},
-          ${name},
-          ${email},
-          ${phone || null},
-          ${eventId},
-          ${numberOfAttendees},
-          'PENDING',
-          NOW()
-        )
-        RETURNING id
-      `
+    // Insert registration data with conditional handling of guardianName
+    try {
+      if (hasGuardianNameColumn.length > 0) {
+        // If guardianName column exists
+        await db`
+          INSERT INTO "EventRegistration" (
+            id, "eventId", name, email, phone, "guardianName", "registrationDate", status
+          ) VALUES (
+            ${registrationId},
+            ${data.eventId},
+            ${data.name},
+            ${data.email},
+            ${data.phone || null},
+            ${data.guardianName || null},
+            NOW(),
+            'REGISTERED'
+          )
+        `
+      } else {
+        // If guardianName column doesn't exist
+        await db`
+          INSERT INTO "EventRegistration" (
+            id, "eventId", name, email, phone, "registrationDate", status
+          ) VALUES (
+            ${registrationId},
+            ${data.eventId},
+            ${data.name},
+            ${data.email},
+            ${data.phone || null},
+            NOW(),
+            'REGISTERED'
+          )
+        `
+      }
+      console.log("Registration successful:", registrationId)
+    } catch (error) {
+      console.error("Error inserting registration:", error)
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Error al guardar el registro",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      )
     }
 
-    console.log("Registration created:", registrationResult)
-
-    // Enviar notificación de confirmación
-    console.log("Sending confirmation notification")
+    // Send confirmation notification
+    let notificationResult
     try {
-      const notificationResult = await sendFreeNotification(
+      notificationResult = await sendFreeNotification(
         "registration",
         {
-          name,
-          guardianName: guardianName || undefined,
-          email,
-          phone: phone || undefined,
+          name: data.name,
+          guardianName: data.guardianName,
+          email: data.email,
+          phone: data.phone,
         },
         {
-          id: event.id,
-          title: event.title,
-          date: event.date,
-          location: event.location,
-          slug: event.slug,
+          id: selectedEvent.id,
+          title: selectedEvent.title,
+          date: selectedEvent.date,
+          location: selectedEvent.location,
+          slug: selectedEvent.shareableSlug,
         },
       )
-      console.log("Notification result:", notificationResult)
-
-      return NextResponse.json({
-        success: true,
-        message: "Registro completado con éxito",
-        data: {
-          id: registrationResult[0].id,
-          name,
-          email,
-        },
-        notification: {
-          emailSent: notificationResult.success,
-          whatsappLink: notificationResult.whatsappLink,
-        },
-      })
-    } catch (notificationError) {
+      console.log("Notification sent:", notificationResult)
+    } catch (error) {
+      console.error("Error sending notification:", error)
       // Continue even if notification fails
-      console.error("Error sending notification:", notificationError)
-
-      return NextResponse.json({
-        success: true,
-        message: "Registro completado con éxito, pero hubo un problema al enviar la notificación",
-        data: {
-          id: registrationResult[0].id,
-          name,
-          email,
-        },
-        notification: {
-          emailSent: false,
-          error: notificationError instanceof Error ? notificationError.message : String(notificationError),
-        },
-      })
+      notificationResult = { success: false, error: String(error) }
     }
+
+    return NextResponse.json({
+      success: true,
+      message: "Registro completado con éxito",
+      registrationId,
+      notificationSent: notificationResult?.success || false,
+      whatsappLink: notificationResult?.whatsappLink || null,
+    })
   } catch (error) {
-    console.error("Error in event registration:", error)
+    console.error("Registration error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Error al procesar el registro",
-        details: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        message: "Error en el proceso de registro",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )
