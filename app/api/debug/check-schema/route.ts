@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { addCorsHeaders, handleCors } from "@/lib/api-utils"
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Handle CORS preflight
+  const corsResponse = handleCors(request as any)
+  if (corsResponse) return corsResponse
+
   try {
     const results = {
       success: true,
@@ -18,7 +23,7 @@ export async function GET() {
     } catch (error) {
       results.issues.push("Database connection failed")
       results.success = false
-      return NextResponse.json(results, { status: 500 })
+      return addCorsHeaders(NextResponse.json(results, { status: 500 }))
     }
 
     // Check Event table
@@ -94,23 +99,25 @@ export async function GET() {
 
         if (count === 0) {
           results.issues.push("No events found in the database")
-          results.recommendations.push("Run /api/debug/fix-event-ids to create a sample event")
+          results.recommendations.push("Create an event in the dashboard or run /api/debug/create-sample-event")
         }
       } catch (error) {
         results.issues.push(`Error counting events: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
 
-    return NextResponse.json(results)
+    return addCorsHeaders(NextResponse.json(results))
   } catch (error) {
     console.error("Error checking schema:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error checking schema",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
+    return addCorsHeaders(
+      NextResponse.json(
+        {
+          success: false,
+          error: "Error checking schema",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      ),
     )
   }
 }

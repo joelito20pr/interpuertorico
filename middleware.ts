@@ -10,6 +10,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Allow access to debug endpoints
+  if (path.startsWith("/api/debug/")) {
+    return NextResponse.next()
+  }
+
   // Allow access to public event pages
   if (path.startsWith("/eventos/")) {
     return NextResponse.next()

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { addCorsHeaders, handleCors } from "@/lib/api-utils"
+import { generateSlug } from "@/lib/utils"
 
 export async function GET(request: Request) {
   // Handle CORS preflight
@@ -29,51 +30,48 @@ export async function GET(request: Request) {
       )
     }
 
-    // Get all events
-    const events = await db`
-      SELECT * FROM "Event" 
-      ORDER BY "date" DESC
+    // Create a sample event
+    const title = "Evento de Prueba"
+    const slug = await generateSlug(title)
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const newEvent = await db`
+      INSERT INTO "Event" (
+        "title", 
+        "description", 
+        "date", 
+        "location", 
+        "maxParticipants", 
+        "shareableSlug",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${title}, 
+        ${"Este es un evento de prueba creado automáticamente para diagnosticar problemas."}, 
+        ${tomorrow.toISOString()}, 
+        ${"San Juan, Puerto Rico"}, 
+        ${100}, 
+        ${slug},
+        ${new Date().toISOString()},
+        ${new Date().toISOString()}
+      ) RETURNING *
     `
-
-    // Count registrations for each event
-    const eventsWithRegistrations = await Promise.all(
-      events.map(async (event) => {
-        try {
-          const registrations = await db`
-            SELECT COUNT(*) as count 
-            FROM "EventRegistration" 
-            WHERE "eventId" = ${event.id}
-          `
-
-          return {
-            ...event,
-            registrationCount: Number.parseInt(registrations[0]?.count || "0"),
-          }
-        } catch (error) {
-          console.error(`Error counting registrations for event ${event.id}:`, error)
-          return {
-            ...event,
-            registrationCount: 0,
-            error: "Failed to count registrations",
-          }
-        }
-      }),
-    )
 
     return addCorsHeaders(
       NextResponse.json({
         success: true,
-        count: events.length,
-        events: eventsWithRegistrations,
+        message: "Sample event created successfully",
+        event: newEvent[0],
       }),
     )
   } catch (error) {
-    console.error("Error listing events:", error)
+    console.error("Error creating sample event:", error)
     return addCorsHeaders(
       NextResponse.json(
         {
           success: false,
-          error: "Error listing events",
+          error: "Error creating sample event",
           details: error instanceof Error ? error.message : String(error),
         },
         { status: 500 },
