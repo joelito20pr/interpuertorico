@@ -14,7 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Calendar, MapPin, DollarSign, Users, ArrowLeft, CheckCircle } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { formatLocation } from "@/lib/utils"
+import { isValidUrl } from "@/lib/utils"
 
 export default function EventoPublicoPage({ params }: { params: { slug: string } }) {
   const router = useRouter()
@@ -248,7 +248,18 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
                   <MapPin className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />
                   <div>
                     <h3 className="font-medium">Ubicación</h3>
-                    <div>{formatLocation(event.location)}</div>
+                    {isValidUrl(event.location) ? (
+                      <a
+                        href={event.location}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {event.location}
+                      </a>
+                    ) : (
+                      <p>{event.location}</p>
+                    )}
                   </div>
                 </div>
                 {event.requiresPayment && (

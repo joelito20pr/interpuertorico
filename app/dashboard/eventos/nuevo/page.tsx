@@ -11,10 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { generateSlug } from "@/lib/utils"
+import { generateSlug, isValidUrl } from "@/lib/utils"
 
 export default function NuevoEventoPage() {
   const router = useRouter()
@@ -71,8 +71,9 @@ export default function NuevoEventoPage() {
       }
 
       // Si es público y no tiene slug, generar uno
-      if (isPublic && !formData.shareableSlug) {
-        formData.shareableSlug = generateSlug(formData.title)
+      let shareableSlug = null
+      if (isPublic) {
+        shareableSlug = formData.shareableSlug || generateSlug(formData.title)
       }
 
       // Use the API endpoint instead of server action
@@ -89,7 +90,7 @@ export default function NuevoEventoPage() {
           requiresPayment,
           price: requiresPayment ? formData.price : null,
           stripeLink: requiresPayment ? formData.stripeLink : null,
-          shareableSlug: isPublic ? formData.shareableSlug : null,
+          shareableSlug,
           maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees) : null,
         }),
       })
@@ -125,7 +126,7 @@ export default function NuevoEventoPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">Crear Nuevo Evento</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Nuevo Evento</h1>
       </div>
 
       {error && (
@@ -139,7 +140,7 @@ export default function NuevoEventoPage() {
       <Card>
         <CardHeader>
           <CardTitle>Información del Evento</CardTitle>
-          <CardDescription>Ingrese los detalles del nuevo evento.</CardDescription>
+          <CardDescription>Complete los detalles del nuevo evento.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -169,15 +170,34 @@ export default function NuevoEventoPage() {
               </div>
 
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="location">Ubicación *</Label>
-                <Input
-                  id="location"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  placeholder="Ej: Centro de Convenciones de Puerto Rico"
-                  required
-                />
+                <Label htmlFor="location">
+                  Ubicación *{" "}
+                  {isValidUrl(formData.location) && <span className="text-xs text-blue-600 ml-1">(URL detectada)</span>}
+                </Label>
+                <div className="flex">
+                  <Input
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    placeholder="Ej: Centro de Convenciones de Puerto Rico o https://maps.google.com/..."
+                    required
+                    className={isValidUrl(formData.location) ? "pr-10" : ""}
+                  />
+                  {isValidUrl(formData.location) && (
+                    <a
+                      href={formData.location}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 flex items-center text-blue-600 hover:text-blue-800"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Puede ingresar una dirección física o un enlace a Google Maps, Waze, etc.
+                </p>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
