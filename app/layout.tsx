@@ -1,9 +1,18 @@
 import type React from "react"
 import "./globals.css"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 
-export const metadata = {
-  title: "Inter Puerto Rico Futsal",
-  description: "Plataforma de gestión para Inter Puerto Rico Futsal",
+const inter = Inter({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: "Inter Puerto Rico Futsal - Patrocinios",
+  description: "Apoya a nuestro equipo de futsal en el Futsal International Championship 2025",
+  icons: {
+    icon: "/favicon.ico",
+  },
     generator: 'v0.dev'
 }
 
@@ -14,7 +23,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body className={inter.className}>
+        <ThemeProvider attribute="class" defaultTheme="light">
+          {children}
+          <Toaster />
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
