@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Calendar, Clock, MapPin, AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, MapPin, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { LocationDisplay } from "@/components/location-display"
 
@@ -19,6 +19,7 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [event, setEvent] = useState<any>(null)
   const [registrationCount, setRegistrationCount] = useState(0)
@@ -30,34 +31,41 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
     numberOfAttendees: 1,
   })
 
-  useEffect(() => {
-    async function loadEvent() {
-      try {
-        console.log("Fetching event with slug:", params.slug)
-        const response = await fetch(`/api/events/slug/${params.slug}`)
+  const loadEvent = async () => {
+    setIsLoading(true)
+    setError(null)
+    setDebugInfo(null)
 
-        if (!response.ok) {
-          console.error("API response not OK:", response.status)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
+    try {
+      console.log("Fetching event with slug:", params.slug)
+      const response = await fetch(`/api/events/slug/${params.slug}`)
 
-        const result = await response.json()
-        console.log("API response:", result)
-
-        if (result.success) {
-          setEvent(result.data)
-          setRegistrationCount(result.data.registrationsCount || 0)
-        } else {
-          setError(result.error || "Error al cargar el evento")
-        }
-      } catch (error) {
-        console.error("Error loading event:", error)
-        setError(`Error al cargar el evento: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        setIsLoading(false)
+      if (!response.ok) {
+        console.error("API response not OK:", response.status)
+        const errorData = await response.json().catch(() => ({}))
+        setDebugInfo(errorData.debug || null)
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-    }
 
+      const result = await response.json()
+      console.log("API response:", result)
+
+      if (result.success) {
+        setEvent(result.data)
+        setRegistrationCount(result.data.registrationsCount || 0)
+      } else {
+        setError(result.error || "Error al cargar el evento")
+        setDebugInfo(result.debug || null)
+      }
+    } catch (error) {
+      console.error("Error loading event:", error)
+      setError(`Error al cargar el evento: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadEvent()
   }, [params.slug])
 
@@ -128,11 +136,65 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
             Volver al inicio
           </Link>
         </div>
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Información de depuración</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-2">
+              Slug solicitado: <code>{params.slug}</code>
+            </p>
+
+            {debugInfo && debugInfo.availableSlugs && debugInfo.availableSlugs.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-medium mb-2">Slugs disponibles:</p>
+                <ul className="text-sm space-y-1">
+                  {debugInfo.availableSlugs.map((slug: string, index: number) => (
+                    <li key={index}>
+                      <Link href={`/eventos/${slug}`} className="text-blue-600 hover:underline">
+                        {slug}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <Button variant="outline" size="sm" onClick={loadEvent} className="flex items-center">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Intentar nuevamente
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Herramientas de diagnóstico:</p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/api/debug/check-slug?slug=torneo-prueba-265" passHref>
+              <Button variant="outline" size="sm">
+                Verificar slugs
+              </Button>
+            </Link>
+            <Link href="/api/events/regenerate-all-slugs" passHref>
+              <Button variant="outline" size="sm">
+                Regenerar todos los slugs
+              </Button>
+            </Link>
+            <Link href="/api/debug/list-events" passHref>
+              <Button variant="outline" size="sm">
+                Listar eventos
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
