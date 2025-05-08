@@ -1,374 +1,294 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
-import { sendFreeNotification } from "@/lib/free-notification-service"
-import { handleCors, withCors } from "@/lib/api-utils"
-
-// Helper function to validate email format
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
-}
-
-// Helper function to check if a table exists
-async function tableExists(tableName: string): Promise<boolean> {
-  try {
-    const result = await db`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public'
-        AND table_name = ${tableName}
-      ) as exists
-    `
-    return result[0]?.exists || false
-  } catch (error) {
-    console.error(`Error checking if table ${tableName} exists:`, error)
-    return false
-  }
-}
-
-// Helper function to check if a column exists in a table
-async function columnExists(tableName: string, columnName: string): Promise<boolean> {
-  try {
-    const result = await db`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns
-        WHERE table_schema = 'public'
-        AND table_name = ${tableName}
-        AND column_name = ${columnName}
-      ) as exists
-    `
-    return result[0]?.exists || false
-  } catch (error) {
-    console.error(`Error checking if column ${columnName} exists in table ${tableName}:`, error)
-    return false
-  }
-}
+import { sql } from "@vercel/postgres"
+import { addCorsHeaders, handleCors } from "@/lib/api-utils"
+import { sendEventRegistrationEmail } from "@/lib/free-notification-service"
 
 export async function POST(request: NextRequest) {
-  console.log("Registration endpoint called")
-
-  // Handle CORS preflight requests
+  // Handle CORS preflight request
   const corsResponse = handleCors(request)
-  if (corsResponse) {
-    console.log("Handling CORS preflight request")
-    return corsResponse
-  }
+  if (corsResponse) return corsResponse
+
+  console.log("Procesando solicitud de registro de evento...")
 
   try {
-    console.log("Processing registration request")
-
-    // Parse request body
-    let data
+    // Verificar conexión a la base de datos
     try {
-      data = await request.json()
-      console.log("Registration data received:", JSON.stringify(data))
-    } catch (error) {
-      console.error("Error parsing request body:", error)
-      return withCors(
+      console.log("Verificando conexión a la base de datos...")
+      await sql`SELECT NOW()`
+      console.log("Conexión a la base de datos exitosa")
+    } catch (dbError: any) {
+      console.error("Error de conexión a la base de datos:", dbError)
+      return addCorsHeaders(
         NextResponse.json(
           {
             success: false,
-            message: "Error al procesar la solicitud: formato JSON inválido",
-            error: error instanceof Error ? error.message : String(error),
-          },
-          { status: 400 },
-        ),
-      )
-    }
-
-    // Validate required fields
-    if (!data.eventId || !data.name || !data.email) {
-      console.error("Missing required fields:", {
-        hasEventId: !!data.eventId,
-        hasName: !!data.name,
-        hasEmail: !!data.email,
-      })
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Se requieren los campos: ID del evento, nombre y correo electrónico",
-            debug: {
-              receivedData: {
-                eventId: data.eventId || null,
-                name: data.name || null,
-                email: data.email || null,
-              },
-            },
-          },
-          { status: 400 },
-        ),
-      )
-    }
-
-    // Validate email format
-    if (!isValidEmail(data.email)) {
-      console.error("Invalid email format:", data.email)
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "El formato del correo electrónico no es válido",
-          },
-          { status: 400 },
-        ),
-      )
-    }
-
-    // Check if Event table exists
-    const eventTableExists = await tableExists("Event")
-    if (!eventTableExists) {
-      console.error("Event table does not exist")
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Error en la base de datos: la tabla de eventos no existe",
-            debug: {
-              missingTable: "Event",
-              recommendation: "Visit /api/repair-database to create missing tables",
-            },
+            message: "Error de conexión a la base de datos",
+            error: dbError.message,
+            step: "database_connection",
           },
           { status: 500 },
         ),
       )
     }
 
-    // Check if EventRegistration table exists
-    const registrationTableExists = await tableExists("EventRegistration")
-    if (!registrationTableExists) {
-      console.error("EventRegistration table does not exist")
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Error en la base de datos: la tabla de registros no existe",
-            debug: {
-              missingTable: "EventRegistration",
-              recommendation: "Visit /api/repair-database to create missing tables",
-            },
-          },
-          { status: 500 },
-        ),
-      )
-    }
-
-    // Check if event exists and is open for registration
-    console.log("Checking if event exists:", data.eventId)
-    const event = await db`
-      SELECT id, title, date, location, "maxAttendees", "isPublic", "shareableSlug"
-      FROM "Event"
-      WHERE id = ${data.eventId}
-    `
-
-    if (event.length === 0) {
-      console.error("Event not found:", data.eventId)
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Evento no encontrado",
-            debug: {
-              requestedEventId: data.eventId,
-            },
-          },
-          { status: 404 },
-        ),
-      )
-    }
-
-    const selectedEvent = event[0]
-    console.log("Event found:", selectedEvent)
-
-    // Check if event is public
-    if (!selectedEvent.isPublic) {
-      console.error("Attempted registration for private event:", data.eventId)
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Este evento no está abierto para registro público",
-            debug: {
-              eventId: data.eventId,
-              isPublic: selectedEvent.isPublic,
-            },
-          },
-          { status: 403 },
-        ),
-      )
-    }
-
-    // Check if event has reached max attendees
-    if (selectedEvent.maxAttendees) {
-      const currentAttendees = await db`
-        SELECT COUNT(*) as count
-        FROM "EventRegistration"
-        WHERE "eventId" = ${data.eventId}
+    // Verificar si la tabla EventRegistration existe
+    try {
+      console.log("Verificando si la tabla EventRegistration existe...")
+      const tableExists = await sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'eventregistration'
+        );
       `
 
-      if (currentAttendees[0].count >= selectedEvent.maxAttendees) {
-        console.error("Event has reached maximum attendees:", {
-          eventId: data.eventId,
-          maxAttendees: selectedEvent.maxAttendees,
-          currentCount: currentAttendees[0].count,
-        })
-        return withCors(
+      if (!tableExists.rows[0].exists) {
+        console.error("La tabla EventRegistration no existe")
+        return addCorsHeaders(
           NextResponse.json(
             {
               success: false,
-              message: "El evento ha alcanzado el número máximo de participantes",
-              debug: {
-                eventId: data.eventId,
-                maxAttendees: selectedEvent.maxAttendees,
-                currentCount: currentAttendees[0].count,
-              },
+              message: "La tabla de registros no existe. Por favor, ejecute la reparación de la base de datos primero.",
+              error: "Table not found",
+              step: "table_check",
+              repairUrl: "/api/debug/database-repair",
+            },
+            { status: 500 },
+          ),
+        )
+      }
+      console.log("Tabla EventRegistration encontrada")
+    } catch (tableError: any) {
+      console.error("Error al verificar la tabla EventRegistration:", tableError)
+      return addCorsHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al verificar la tabla de registros",
+            error: tableError.message,
+            step: "table_check",
+          },
+          { status: 500 },
+        ),
+      )
+    }
+
+    // Parsear el cuerpo de la solicitud
+    let body
+    try {
+      console.log("Parseando cuerpo de la solicitud...")
+      body = await request.json()
+      console.log("Datos recibidos:", JSON.stringify(body))
+    } catch (parseError: any) {
+      console.error("Error al parsear el cuerpo de la solicitud:", parseError)
+      return addCorsHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al parsear el cuerpo de la solicitud",
+            error: parseError.message,
+            step: "request_parsing",
+          },
+          { status: 400 },
+        ),
+      )
+    }
+
+    // Validar datos requeridos
+    if (!body.eventId || !body.name || !body.email) {
+      console.error("Datos requeridos faltantes:", {
+        hasEventId: !!body.eventId,
+        hasName: !!body.name,
+        hasEmail: !!body.email,
+      })
+      return addCorsHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Faltan datos requeridos (eventId, name, email)",
+            error: "Missing required fields",
+            step: "data_validation",
+            receivedData: {
+              hasEventId: !!body.eventId,
+              hasName: !!body.name,
+              hasEmail: !!body.email,
+            },
+          },
+          { status: 400 },
+        ),
+      )
+    }
+
+    // Verificar si el evento existe
+    try {
+      console.log(`Verificando si el evento ${body.eventId} existe...`)
+      const eventExists = await sql`
+        SELECT EXISTS (
+          SELECT 1 FROM events WHERE id = ${body.eventId}
+        );
+      `
+
+      if (!eventExists.rows[0].exists) {
+        console.error(`El evento con ID ${body.eventId} no existe`)
+        return addCorsHeaders(
+          NextResponse.json(
+            {
+              success: false,
+              message: `El evento con ID ${body.eventId} no existe`,
+              error: "Event not found",
+              step: "event_check",
+            },
+            { status: 404 },
+          ),
+        )
+      }
+      console.log(`Evento ${body.eventId} encontrado`)
+    } catch (eventError: any) {
+      console.error("Error al verificar el evento:", eventError)
+      return addCorsHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al verificar el evento",
+            error: eventError.message,
+            step: "event_check",
+          },
+          { status: 500 },
+        ),
+      )
+    }
+
+    // Verificar si el usuario ya está registrado
+    try {
+      console.log(`Verificando si ${body.email} ya está registrado para el evento ${body.eventId}...`)
+      const existingRegistration = await sql`
+        SELECT id FROM EventRegistration 
+        WHERE eventId = ${body.eventId} AND email = ${body.email};
+      `
+
+      if (existingRegistration.rowCount > 0) {
+        console.log(`El usuario ${body.email} ya está registrado para el evento ${body.eventId}`)
+        return addCorsHeaders(
+          NextResponse.json(
+            {
+              success: false,
+              message: "Ya estás registrado para este evento",
+              error: "Already registered",
+              step: "duplicate_check",
+              registrationId: existingRegistration.rows[0].id,
             },
             { status: 409 },
           ),
         )
       }
-    }
-
-    // Check if this email is already registered for this event
-    const existingRegistration = await db`
-      SELECT id
-      FROM "EventRegistration"
-      WHERE "eventId" = ${data.eventId}
-      AND email = ${data.email}
-    `
-
-    if (existingRegistration.length > 0) {
-      console.error("Email already registered for this event:", {
-        eventId: data.eventId,
-        email: data.email,
-      })
-      return withCors(
+      console.log(`El usuario ${body.email} no está registrado para el evento ${body.eventId}`)
+    } catch (duplicateError: any) {
+      console.error("Error al verificar registro duplicado:", duplicateError)
+      return addCorsHeaders(
         NextResponse.json(
           {
             success: false,
-            message: "Este correo electrónico ya está registrado para este evento",
-            debug: {
-              eventId: data.eventId,
-              email: data.email,
-              registrationId: existingRegistration[0].id,
-            },
-          },
-          { status: 409 },
-        ),
-      )
-    }
-
-    // Generate a unique ID for the registration
-    const registrationId = `reg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-
-    // Check if the table has guardianName column before attempting to insert
-    const hasGuardianNameColumn = await columnExists("EventRegistration", "guardianName")
-    console.log("Has guardianName column:", hasGuardianNameColumn)
-
-    // Insert registration data with conditional handling of guardianName
-    try {
-      if (hasGuardianNameColumn) {
-        // If guardianName column exists
-        console.log("Inserting registration with guardianName")
-        await db`
-          INSERT INTO "EventRegistration" (
-            id, "eventId", name, email, phone, "guardianName", "registrationDate", status, "numberOfAttendees"
-          ) VALUES (
-            ${registrationId},
-            ${data.eventId},
-            ${data.name},
-            ${data.email},
-            ${data.phone || null},
-            ${data.guardianName || null},
-            NOW(),
-            'REGISTERED',
-            ${data.numberOfAttendees || 1}
-          )
-        `
-      } else {
-        // If guardianName column doesn't exist
-        console.log("Inserting registration without guardianName")
-        await db`
-          INSERT INTO "EventRegistration" (
-            id, "eventId", name, email, phone, "registrationDate", status, "numberOfAttendees"
-          ) VALUES (
-            ${registrationId},
-            ${data.eventId},
-            ${data.name},
-            ${data.email},
-            ${data.phone || null},
-            NOW(),
-            'REGISTERED',
-            ${data.numberOfAttendees || 1}
-          )
-        `
-      }
-      console.log("Registration successful:", registrationId)
-    } catch (error) {
-      console.error("Error inserting registration:", error)
-      return withCors(
-        NextResponse.json(
-          {
-            success: false,
-            message: "Error al guardar el registro",
-            error: error instanceof Error ? error.message : String(error),
-            debug: {
-              registrationId,
-              eventId: data.eventId,
-              hasGuardianNameColumn,
-            },
+            message: "Error al verificar registro duplicado",
+            error: duplicateError.message,
+            step: "duplicate_check",
           },
           { status: 500 },
         ),
       )
     }
 
-    // Send confirmation notification
-    let notificationResult
+    // Registrar al usuario
+    let registrationId
     try {
-      console.log("Sending confirmation notification")
-      notificationResult = await sendFreeNotification(
-        "registration",
-        {
-          name: data.name,
-          guardianName: data.guardianName,
-          email: data.email,
-          phone: data.phone,
-        },
-        {
-          id: selectedEvent.id,
-          title: selectedEvent.title,
-          date: selectedEvent.date,
-          location: selectedEvent.location,
-          slug: selectedEvent.shareableSlug,
-        },
+      console.log("Registrando al usuario...")
+      const result = await sql`
+        INSERT INTO EventRegistration (
+          eventId, name, email, phone, team, registrationDate
+        ) VALUES (
+          ${body.eventId}, 
+          ${body.name}, 
+          ${body.email}, 
+          ${body.phone || null}, 
+          ${body.team || null}, 
+          ${new Date().toISOString()}
+        ) RETURNING id;
+      `
+      registrationId = result.rows[0].id
+      console.log(`Usuario registrado con ID: ${registrationId}`)
+    } catch (insertError: any) {
+      console.error("Error al registrar al usuario:", insertError)
+      return addCorsHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al registrar al usuario",
+            error: insertError.message,
+            step: "registration_insert",
+          },
+          { status: 500 },
+        ),
       )
-      console.log("Notification sent:", notificationResult)
-    } catch (error) {
-      console.error("Error sending notification:", error)
-      // Continue even if notification fails
-      notificationResult = { success: false, error: String(error) }
     }
 
-    // At the end, wrap the response with CORS headers
-    console.log("Returning success response")
-    return withCors(
+    // Obtener detalles del evento para la notificación
+    let eventDetails
+    try {
+      console.log(`Obteniendo detalles del evento ${body.eventId}...`)
+      const eventResult = await sql`
+        SELECT title, date, location FROM events WHERE id = ${body.eventId};
+      `
+
+      if (eventResult.rowCount === 0) {
+        console.error(`No se encontraron detalles para el evento ${body.eventId}`)
+        eventDetails = { title: "Evento", date: new Date(), location: "Por confirmar" }
+      } else {
+        eventDetails = eventResult.rows[0]
+        console.log("Detalles del evento obtenidos:", eventDetails)
+      }
+    } catch (eventDetailsError: any) {
+      console.error("Error al obtener detalles del evento:", eventDetailsError)
+      eventDetails = { title: "Evento", date: new Date(), location: "Por confirmar" }
+    }
+
+    // Enviar notificación por correo electrónico
+    let notificationResult = { success: false, message: "No se intentó enviar notificación" }
+    try {
+      console.log(`Enviando notificación por correo electrónico a ${body.email}...`)
+      notificationResult = await sendEventRegistrationEmail({
+        to: body.email,
+        name: body.name,
+        eventTitle: eventDetails.title,
+        eventDate: eventDetails.date,
+        eventLocation: eventDetails.location,
+      })
+      console.log("Resultado de la notificación:", notificationResult)
+    } catch (notificationError: any) {
+      console.error("Error al enviar notificación:", notificationError)
+      notificationResult = {
+        success: false,
+        message: `Error al enviar notificación: ${notificationError.message}`,
+      }
+    }
+
+    // Devolver respuesta exitosa
+    return addCorsHeaders(
       NextResponse.json({
         success: true,
-        message: "Registro completado con éxito",
+        message: "Registro exitoso",
         registrationId,
-        notificationSent: notificationResult?.success || false,
-        whatsappLink: notificationResult?.whatsappLink || null,
+        notification: notificationResult,
+        timestamp: new Date().toISOString(),
       }),
     )
-  } catch (error) {
-    console.error("Registration error:", error)
-    return withCors(
+  } catch (error: any) {
+    console.error("Error general en el registro de evento:", error)
+
+    return addCorsHeaders(
       NextResponse.json(
         {
           success: false,
-          message: "Error en el proceso de registro",
-          error: error instanceof Error ? error.message : String(error),
+          message: "Error en el registro de evento",
+          error: error.message,
+          timestamp: new Date().toISOString(),
         },
         { status: 500 },
       ),
@@ -376,8 +296,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Add OPTIONS method handler for CORS preflight
+// Manejar solicitudes OPTIONS para CORS
 export async function OPTIONS(request: NextRequest) {
-  console.log("OPTIONS request received for registration endpoint")
   return handleCors(request) || new NextResponse(null, { status: 200 })
 }
