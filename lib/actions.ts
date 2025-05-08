@@ -1,11 +1,11 @@
 "use server"
 
-import { db } from "@/lib/db"
 import { revalidatePath } from "next/cache"
-import { hash, compare } from "bcryptjs" // Cambiado de bcrypt a bcryptjs
-import { getServerSession } from "next-auth"
+import bcrypt from "bcryptjs"
+import { getServerSession as getServerSessionNext } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { cookies } from "next/headers"
+import * as db from "@/lib/db"
 
 // Acciones para eventos
 export async function createEvent(eventData: {
@@ -18,9 +18,7 @@ export async function createEvent(eventData: {
   stripeLink: string | null
 }) {
   try {
-    const event = await db.event.create({
-      data: eventData,
-    })
+    const event = await db.createEvent(eventData)
 
     revalidatePath("/dashboard/eventos")
     return { success: true, data: event }
@@ -43,10 +41,7 @@ export async function updateEvent(
   },
 ) {
   try {
-    const event = await db.event.update({
-      where: { id },
-      data: eventData,
-    })
+    const event = await db.updateEvent(id, eventData)
 
     revalidatePath(`/dashboard/eventos/${id}`)
     revalidatePath("/dashboard/eventos")
@@ -59,9 +54,7 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string) {
   try {
-    await db.event.delete({
-      where: { id },
-    })
+    await db.query(`DELETE FROM "Event" WHERE id = $1`, [id])
 
     revalidatePath("/dashboard/eventos")
     return { success: true }
@@ -81,79 +74,29 @@ export async function registerForEvent(data: {
   previousClub: string
 }) {
   try {
-    // Primero, verificar si ya existe un miembro con este correo electrónico
-    let member = await db.member.findFirst({
-      where: {
-        email: data.email,
-      },
-    })
-
-    // Si no existe, crear un nuevo miembro
-    if (!member) {
-      member = await db.member.create({
-        data: {
-          name: data.playerName,
-          parentName: data.parentName,
-          email: data.email,
-          phone: data.phone,
-          previousClub: data.previousClub,
-        },
-      })
-    }
-
-    // Verificar si ya está registrado para este evento
-    const existingRegistration = await db.registration.findFirst({
-      where: {
-        eventId: data.eventId,
-        memberId: member.id,
-      },
-    })
-
-    if (existingRegistration) {
-      return {
-        success: false,
-        error: "Ya estás registrado para este evento",
-      }
-    }
-
-    // Crear el registro
-    const registration = await db.registration.create({
-      data: {
-        eventId: data.eventId,
-        memberId: member.id,
-      },
-    })
+    const registration = await db.registerForEvent(data)
 
     revalidatePath(`/dashboard/eventos/${data.eventId}`)
     return { success: true, data: registration }
   } catch (error) {
     console.error("Error al registrar:", error)
-    return { success: false, error: "Error al procesar el registro" }
+    return { success: false, error: error instanceof Error ? error.message : "Error al procesar el registro" }
   }
 }
 
 // Crear usuario administrador (solo para inicialización)
 export async function createAdminUser() {
   try {
-    const existingAdmin = await db.user.findUnique({
-      where: {
-        email: "admin@interpr.com",
-      },
-    })
+    const existingAdmin = await db.getUserByEmail("admin@interpr.com")
 
     if (existingAdmin) {
       return { success: true, message: "El administrador ya existe" }
     }
 
-    const hashedPassword = await hash("admin123", 10)
+    // Usar bcrypt.hash en lugar de hash directamente
+    const hashedPassword = await bcrypt.hash("admin123", 10)
 
-    await db.user.create({
-      data: {
-        name: "Administrador",
-        email: "admin@interpr.com",
-        password: hashedPassword,
-      },
-    })
+    await db.createAdminUser("Administrador", "admin@interpr.com", hashedPassword)
 
     return { success: true, message: "Administrador creado con éxito" }
   } catch (error) {
@@ -169,9 +112,7 @@ export async function createTeam(teamData: {
   description: string | null
 }) {
   try {
-    const team = await db.team.create({
-      data: teamData,
-    })
+    const team = await db.createTeam(teamData)
 
     revalidatePath("/dashboard/equipos")
     return { success: true, data: team }
@@ -190,10 +131,7 @@ export async function updateTeam(
   },
 ) {
   try {
-    const team = await db.team.update({
-      where: { id },
-      data: teamData,
-    })
+    const team = await db.updateTeam(id, teamData)
 
     revalidatePath(`/dashboard/equipos/${id}`)
     revalidatePath("/dashboard/equipos")
@@ -206,9 +144,7 @@ export async function updateTeam(
 
 export async function deleteTeam(id: string) {
   try {
-    await db.team.delete({
-      where: { id },
-    })
+    await db.deleteTeam(id)
 
     revalidatePath("/dashboard/equipos")
     return { success: true }
@@ -233,56 +169,51 @@ export async function addTeamMember(data: {
 }) {
   try {
     // Verificar si ya existe un miembro con este correo electrónico
-    let member = await db.member.findFirst({
-      where: {
-        email: data.email,
-      },
-    })
+    const existingMember = await db.getMemberByEmail(data.email)
 
-    // Si no existe, crear un nuevo miembro
-    if (!member) {
-      const memberData: any = {
+    let hashedPassword = null
+    if (data.createAccount && data.password) {
+      // Usar bcrypt.hash en lugar de hash directamente
+      hashedPassword = await bcrypt.hash(data.password, 10)
+    }
+
+    let member
+    if (!existingMember) {
+      // Crear nuevo miembro
+      member = await db.addTeamMember({
+        teamId: data.teamId,
         name: data.name,
         parentName: data.parentName,
         email: data.email,
         phone: data.phone,
-        teamId: data.teamId,
         isPlayer: data.isPlayer,
         isParent: data.isParent,
         relatedMemberId: data.relatedMemberId,
-      }
-
-      // Si se va a crear una cuenta, añadir contraseña
-      if (data.createAccount && data.password) {
-        const hashedPassword = await hash(data.password, 10)
-        memberData.password = hashedPassword
-      }
-
-      member = await db.member.create({
-        data: memberData,
+        password: hashedPassword,
       })
     } else {
-      // Si ya existe, actualizar sus datos
-      const memberData: any = {
-        name: data.name,
-        parentName: data.parentName,
-        phone: data.phone,
-        teamId: data.teamId,
-        isPlayer: data.isPlayer,
-        isParent: data.isParent,
-        relatedMemberId: data.relatedMemberId,
-      }
-
-      // Si se va a crear una cuenta, añadir contraseña
-      if (data.createAccount && data.password) {
-        const hashedPassword = await hash(data.password, 10)
-        memberData.password = hashedPassword
-      }
-
-      member = await db.member.update({
-        where: { id: member.id },
-        data: memberData,
-      })
+      // Actualizar miembro existente
+      member = await db.query(
+        `
+        UPDATE "Member"
+        SET name = $1, "parentName" = $2, phone = $3, "teamId" = $4, 
+            "isPlayer" = $5, "isParent" = $6, "relatedMemberId" = $7,
+            password = COALESCE($8, password), "updatedAt" = NOW()
+        WHERE id = $9
+        RETURNING *
+      `,
+        [
+          data.name,
+          data.parentName,
+          data.phone,
+          data.teamId,
+          data.isPlayer,
+          data.isParent,
+          data.relatedMemberId,
+          hashedPassword,
+          existingMember.id,
+        ],
+      )
     }
 
     revalidatePath(`/dashboard/equipos/${data.teamId}`)
@@ -301,20 +232,18 @@ export async function createPost(data: {
   isPublic: boolean
 }) {
   try {
-    // Obtener el usuario actual (debe implementarse con getServerSession)
-    const session = await getServerSession(authOptions)
+    // Obtener el usuario actual
+    const session = await getServerSessionNext(authOptions)
     if (!session?.user?.id) {
       return { success: false, error: "No autorizado" }
     }
 
-    const post = await db.post.create({
-      data: {
-        title: data.title,
-        content: data.content,
-        teamId: data.teamId,
-        authorId: session.user.id,
-        isPublic: data.isPublic,
-      },
+    const post = await db.createPost({
+      teamId: data.teamId,
+      authorId: session.user.id,
+      title: data.title,
+      content: data.content,
+      isPublic: data.isPublic,
     })
 
     revalidatePath(`/dashboard/equipos/${data.teamId}`)
@@ -331,31 +260,31 @@ export async function createComment(data: {
   content: string
 }) {
   try {
-    // Obtener el usuario actual (debe implementarse con getServerSession)
-    const session = await getServerSession(authOptions)
+    // Obtener el usuario actual
+    const session = await getServerSessionNext(authOptions)
     if (!session?.user?.id) {
       return { success: false, error: "No autorizado" }
     }
 
     // Obtener el post para saber a qué equipo pertenece
-    const post = await db.post.findUnique({
-      where: { id: data.postId },
-      select: { teamId: true },
-    })
+    const post = await db.query(
+      `
+      SELECT "teamId" FROM "Post" WHERE id = $1
+    `,
+      [data.postId],
+    )
 
-    if (!post) {
+    if (!post || post.length === 0) {
       return { success: false, error: "Publicación no encontrada" }
     }
 
-    const comment = await db.comment.create({
-      data: {
-        content: data.content,
-        postId: data.postId,
-        authorId: session.user.id,
-      },
+    const comment = await db.createComment({
+      postId: data.postId,
+      authorId: session.user.id,
+      content: data.content,
     })
 
-    revalidatePath(`/dashboard/equipos/${post.teamId}`)
+    revalidatePath(`/dashboard/equipos/${post[0].teamId}`)
     return { success: true, data: comment }
   } catch (error) {
     console.error("Error al crear comentario:", error)
@@ -370,18 +299,14 @@ export async function loginMember(data: {
 }) {
   try {
     // Buscar miembro por email
-    const member = await db.member.findFirst({
-      where: {
-        email: data.email,
-      },
-    })
+    const member = await db.getMemberByEmail(data.email)
 
     if (!member || !member.password) {
       return { success: false, error: "Credenciales incorrectas" }
     }
 
-    // Verificar contraseña
-    const isPasswordValid = await compare(data.password, member.password)
+    // Usar bcrypt.compare en lugar de compare directamente
+    const isPasswordValid = await bcrypt.compare(data.password, member.password)
 
     if (!isPasswordValid) {
       return { success: false, error: "Credenciales incorrectas" }
@@ -419,22 +344,22 @@ export async function createMemberComment(data: {
 }) {
   try {
     // Verificar que el post existe
-    const post = await db.post.findUnique({
-      where: { id: data.postId },
-      select: { id: true, teamId: true },
-    })
+    const post = await db.query(
+      `
+      SELECT id, "teamId" FROM "Post" WHERE id = $1
+    `,
+      [data.postId],
+    )
 
-    if (!post) {
+    if (!post || post.length === 0) {
       return { success: false, error: "Publicación no encontrada" }
     }
 
     // Crear comentario
-    const comment = await db.comment.create({
-      data: {
-        content: data.content,
-        postId: data.postId,
-        authorId: data.memberId,
-      },
+    const comment = await db.createComment({
+      postId: data.postId,
+      authorId: data.memberId,
+      content: data.content,
     })
 
     revalidatePath(`/portal/mensajes/${data.postId}`)
