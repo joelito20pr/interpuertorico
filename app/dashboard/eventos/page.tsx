@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Calendar, MapPin, DollarSign, Trash2, Edit, MoreHorizontal } from "lucide-react"
+import { Search, Plus, MoreHorizontal, Trash2, Edit, MapPin, DollarSign, Calendar } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,17 +14,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getEvents, deleteEvent } from "@/lib/actions"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
-import { useToast } from "@/components/ui/use-toast"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function EventosPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [events, setEvents] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
-  const { toast } = useToast()
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -34,23 +32,33 @@ export default function EventosPage() {
   async function loadEvents() {
     setIsLoading(true)
     try {
-      const result = await getEvents()
+      // First test the database connection
+      const testResponse = await fetch("/api/test-db")
+      const testResult = await testResponse.json()
+
+      if (!testResult.success) {
+        setError(`Database connection error: ${testResult.error || "Unknown error"}`)
+        setIsLoading(false)
+        return
+      }
+
+      // If connection is successful, fetch events
+      const response = await fetch("/api/events")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+
       if (result.success) {
         setEvents(result.data)
       } else {
-        toast({
-          title: "Error",
-          description: result.error || "No se pudieron cargar los eventos",
-          variant: "destructive",
-        })
+        setError(result.error || "No se pudieron cargar los eventos")
       }
     } catch (error) {
       console.error("Error loading events:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al cargar los eventos",
-        variant: "destructive",
-      })
+      setError(`Error al cargar los eventos: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsLoading(false)
     }
@@ -59,27 +67,24 @@ export default function EventosPage() {
   const handleDeleteEvent = async (id: string) => {
     if (confirm("¿Estás seguro de que deseas eliminar este evento?")) {
       try {
-        const result = await deleteEvent(id)
+        const response = await fetch(`/api/events/${id}`, {
+          method: "DELETE",
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
+
         if (result.success) {
-          toast({
-            title: "Éxito",
-            description: "Evento eliminado correctamente",
-          })
           loadEvents()
         } else {
-          toast({
-            title: "Error",
-            description: result.error || "No se pudo eliminar el evento",
-            variant: "destructive",
-          })
+          setError(result.error || "No se pudo eliminar el evento")
         }
       } catch (error) {
         console.error("Error deleting event:", error)
-        toast({
-          title: "Error",
-          description: "Ocurrió un error al eliminar el evento",
-          variant: "destructive",
-        })
+        setError(`Error al eliminar el evento: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
   }
@@ -93,7 +98,11 @@ export default function EventosPage() {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
-      return format(date, "d 'de' MMMM, yyyy", { locale: es })
+      return new Intl.DateTimeFormat("es", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(date)
     } catch (e) {
       return dateString
     }
@@ -114,6 +123,14 @@ export default function EventosPage() {
           Nuevo Evento
         </Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

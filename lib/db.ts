@@ -1,6 +1,11 @@
-import { neon } from "@neondatabase/serverless"
+import { neon, neonConfig } from "@neondatabase/serverless"
 
-// Create a SQL client with better error handling and fallbacks
+// Configure neon with retries and timeouts
+neonConfig.fetchConnectionCache = true
+neonConfig.fetchRetryTimeout = 5000 // 5 seconds
+neonConfig.fetchRetryCount = 3
+
+// Create a SQL client with better error handling
 let db
 try {
   // Make sure we have a DATABASE_URL
@@ -15,14 +20,9 @@ try {
 } catch (error) {
   console.error("Error initializing database connection:", error)
 
-  // Create a fallback client that logs errors but doesn't crash the app
+  // Create a fallback client that logs errors
   db = {
     async query(...args) {
-      console.error("Database connection failed, using fallback client. Query:", args[0])
-      return []
-    },
-    // Support for tagged template literals
-    async raw(...args) {
       console.error("Database connection failed, using fallback client. Query:", args[0])
       return []
     },
@@ -39,6 +39,25 @@ try {
 
 // Export the db client
 export { db }
+
+// Simple test function to verify database connection
+export async function testDatabaseConnection() {
+  try {
+    const result = await db`SELECT NOW() as time`
+    return {
+      success: true,
+      time: result?.[0]?.time,
+      message: "Database connection successful",
+    }
+  } catch (error) {
+    console.error("Database connection test failed:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      message: "Database connection failed",
+    }
+  }
+}
 
 // User functions
 export async function getUserByEmail(email: string) {

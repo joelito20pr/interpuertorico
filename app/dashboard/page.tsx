@@ -6,9 +6,6 @@ import { DollarSign, Users, Calendar, TrendingUp, ArrowRight, ChevronRight, Aler
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { getDashboardData } from "@/lib/actions"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function DashboardPage() {
@@ -29,18 +26,34 @@ export default function DashboardPage() {
     async function loadDashboardData() {
       try {
         console.log("Fetching dashboard data...")
-        const result = await getDashboardData()
-        console.log("Dashboard data result:", result)
+
+        // First, test the database connection
+        const testResponse = await fetch("/api/test-db")
+        const testResult = await testResponse.json()
+
+        if (!testResult.success) {
+          setError(`Database connection error: ${testResult.error || "Unknown error"}`)
+          setIsLoading(false)
+          return
+        }
+
+        // If connection is successful, fetch dashboard data
+        const response = await fetch("/api/dashboard")
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
 
         if (result.success && result.data) {
           setStats(result.data)
         } else {
           setError(result.error || "Error al cargar los datos")
-          console.error("Dashboard data error details:", result.details)
         }
       } catch (err) {
         console.error("Error loading dashboard data:", err)
-        setError("Error al conectar con el servidor")
+        setError(`Error al conectar con el servidor: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setIsLoading(false)
       }
@@ -54,7 +67,11 @@ export default function DashboardPage() {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
-      return format(date, "d 'de' MMMM, yyyy", { locale: es })
+      return new Intl.DateTimeFormat("es", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(date)
     } catch (e) {
       return dateString
     }
@@ -114,7 +131,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{isLoading ? "..." : stats.eventCount}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.upcomingEvents.length > 0
+              {stats.upcomingEvents && stats.upcomingEvents.length > 0
                 ? `Próximo: ${formatDate(stats.upcomingEvents[0]?.date)}`
                 : "No hay eventos próximos"}
             </p>
@@ -150,7 +167,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : stats.recentSponsors.length > 0 ? (
+            ) : stats.recentSponsors && stats.recentSponsors.length > 0 ? (
               <div className="space-y-2">
                 {stats.recentSponsors.map((sponsor: any) => (
                   <div key={sponsor.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50">
@@ -185,7 +202,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : stats.upcomingEvents.length > 0 ? (
+            ) : stats.upcomingEvents && stats.upcomingEvents.length > 0 ? (
               <div className="space-y-4">
                 {stats.upcomingEvents.map((event: any) => (
                   <div key={event.id} className="space-y-1">
