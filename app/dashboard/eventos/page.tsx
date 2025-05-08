@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, MoreHorizontal, Trash2, Edit, MapPin, DollarSign, Calendar } from "lucide-react"
+import { Search, Plus, MoreHorizontal, Trash2, Edit, MapPin, DollarSign, Calendar, LinkIcon, Copy } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
 export default function EventosPage() {
@@ -23,6 +24,7 @@ export default function EventosPage() {
   const [events, setEvents] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
   const router = useRouter()
 
   useEffect(() => {
@@ -78,6 +80,10 @@ export default function EventosPage() {
         const result = await response.json()
 
         if (result.success) {
+          toast({
+            title: "Éxito",
+            description: "Evento eliminado correctamente",
+          })
           loadEvents()
         } else {
           setError(result.error || "No se pudo eliminar el evento")
@@ -87,6 +93,15 @@ export default function EventosPage() {
         setError(`Error al eliminar el evento: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
+  }
+
+  const copyShareableLink = (slug: string) => {
+    const link = `${window.location.origin}/eventos/${slug}`
+    navigator.clipboard.writeText(link)
+    toast({
+      title: "Enlace copiado",
+      description: "El enlace ha sido copiado al portapapeles",
+    })
   }
 
   const filteredEvents = events.filter(
@@ -177,6 +192,7 @@ export default function EventosPage() {
                       >
                         {isPastEvent(event.date) ? "Pasado" : "Próximo"}
                       </Badge>
+                      {event.shareableSlug && <Badge className="ml-2 bg-blue-100 text-blue-800">Público</Badge>}
                     </div>
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center text-sm text-gray-500">
@@ -190,7 +206,21 @@ export default function EventosPage() {
                       {event.requiresPayment && (
                         <div className="flex items-center text-sm text-gray-500">
                           <DollarSign className="mr-2 h-4 w-4" />
-                          Precio: ${event.price}
+                          Precio: {event.price}
+                        </div>
+                      )}
+                      {event.shareableSlug && (
+                        <div className="flex items-center text-sm text-blue-600 mt-2">
+                          <LinkIcon className="mr-2 h-4 w-4" />
+                          <span className="mr-2">Enlace compartible</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 p-0"
+                            onClick={() => copyShareableLink(event.shareableSlug)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -209,6 +239,12 @@ export default function EventosPage() {
                           <Edit className="mr-2 h-4 w-4" />
                           <span>Editar</span>
                         </DropdownMenuItem>
+                        {event.shareableSlug && (
+                          <DropdownMenuItem onClick={() => copyShareableLink(event.shareableSlug)}>
+                            <LinkIcon className="mr-2 h-4 w-4" />
+                            <span>Copiar enlace</span>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleDeleteEvent(event.id)} className="text-red-600">
                           <Trash2 className="mr-2 h-4 w-4" />

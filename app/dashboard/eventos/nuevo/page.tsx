@@ -14,12 +14,14 @@ import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { generateSlug } from "@/lib/utils"
 
 export default function NuevoEventoPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPayment, setRequiresPayment] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -28,6 +30,8 @@ export default function NuevoEventoPage() {
     location: "",
     price: "",
     stripeLink: "",
+    maxAttendees: "",
+    shareableSlug: "",
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -35,6 +39,14 @@ export default function NuevoEventoPage() {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+    }))
+  }
+
+  const generateShareableSlug = () => {
+    const slug = generateSlug(formData.title)
+    setFormData((prev) => ({
+      ...prev,
+      shareableSlug: slug,
     }))
   }
 
@@ -58,6 +70,11 @@ export default function NuevoEventoPage() {
         return
       }
 
+      // Si es público y no tiene slug, generar uno
+      if (isPublic && !formData.shareableSlug) {
+        formData.shareableSlug = generateSlug(formData.title)
+      }
+
       // Use the API endpoint instead of server action
       const response = await fetch("/api/events", {
         method: "POST",
@@ -72,6 +89,8 @@ export default function NuevoEventoPage() {
           requiresPayment,
           price: requiresPayment ? formData.price : null,
           stripeLink: requiresPayment ? formData.stripeLink : null,
+          shareableSlug: isPublic ? formData.shareableSlug : null,
+          maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees) : null,
         }),
       })
 
@@ -172,6 +191,50 @@ export default function NuevoEventoPage() {
                   rows={4}
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maxAttendees">Número máximo de asistentes</Label>
+                <Input
+                  id="maxAttendees"
+                  name="maxAttendees"
+                  type="number"
+                  value={formData.maxAttendees}
+                  onChange={handleInputChange}
+                  placeholder="Dejar en blanco si no hay límite"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 h-full pt-6">
+                  <Switch id="isPublic" checked={isPublic} onCheckedChange={setIsPublic} />
+                  <Label htmlFor="isPublic">Permitir registro público</Label>
+                </div>
+              </div>
+
+              {isPublic && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="shareableSlug">
+                    Enlace compartible (se generará automáticamente si se deja en blanco)
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id="shareableSlug"
+                      name="shareableSlug"
+                      value={formData.shareableSlug}
+                      onChange={handleInputChange}
+                      placeholder="Ej: torneo-futsal-2025"
+                    />
+                    <Button type="button" variant="outline" onClick={generateShareableSlug}>
+                      Generar
+                    </Button>
+                  </div>
+                  {formData.shareableSlug && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      URL: {window.location.origin}/eventos/{formData.shareableSlug}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2 sm:col-span-2">
                 <div className="flex items-center space-x-2">

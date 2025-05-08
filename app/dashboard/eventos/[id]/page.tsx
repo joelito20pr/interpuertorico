@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Trash2 } from "lucide-react"
+import { ArrowLeft, Trash2, LinkIcon, Copy, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { format } from "date-fns"
+import { generateSlug, isValidUrl } from "@/lib/utils"
 
 export default function EditarEventoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -22,6 +23,7 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPayment, setRequiresPayment] = useState(false)
+  const [isPublic, setIsPublic] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -30,6 +32,8 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
     location: "",
     price: "",
     stripeLink: "",
+    maxAttendees: "",
+    shareableSlug: "",
   })
 
   useEffect(() => {
@@ -46,6 +50,7 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         if (result.success && result.data) {
           const event = result.data
           setRequiresPayment(event.requiresPayment)
+          setIsPublic(!!event.shareableSlug)
 
           // Format date for datetime-local input
           const eventDate = new Date(event.date)
@@ -58,6 +63,8 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
             location: event.location,
             price: event.price || "",
             stripeLink: event.stripeLink || "",
+            maxAttendees: event.maxAttendees ? String(event.maxAttendees) : "",
+            shareableSlug: event.shareableSlug || "",
           })
         } else {
           toast({
@@ -91,6 +98,23 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
     }))
   }
 
+  const generateShareableSlug = () => {
+    const slug = generateSlug(formData.title)
+    setFormData((prev) => ({
+      ...prev,
+      shareableSlug: slug,
+    }))
+  }
+
+  const copyShareableLink = () => {
+    const link = `${window.location.origin}/eventos/${formData.shareableSlug}`
+    navigator.clipboard.writeText(link)
+    toast({
+      title: "Enlace copiado",
+      description: "El enlace ha sido copiado al portapapeles",
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -111,6 +135,11 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         return
       }
 
+      // Si es público y no tiene slug, generar uno
+      if (isPublic && !formData.shareableSlug) {
+        formData.shareableSlug = generateSlug(formData.title)
+      }
+
       // Use the API endpoint instead of server action
       const response = await fetch(`/api/events/${params.id}`, {
         method: "PUT",
@@ -125,6 +154,8 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
           requiresPayment,
           price: requiresPayment ? formData.price : null,
           stripeLink: requiresPayment ? formData.stripeLink : null,
+          shareableSlug: isPublic ? formData.shareableSlug : null,
+          maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees) : null,
         }),
       })
 
@@ -213,6 +244,22 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         </Alert>
       )}
 
+      {isPublic && formData.shareableSlug && (
+        <Alert>
+          <LinkIcon className="h-4 w-4" />
+          <AlertTitle>Enlace compartible</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              {window.location.origin}/eventos/{formData.shareableSlug}
+            </span>
+            <Button variant="outline" size="sm" onClick={copyShareableLink}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Información del Evento</CardTitle>
@@ -246,15 +293,34 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
               </div>
 
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="location">Ubicación *</Label>
-                <Input
-                  id="location"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  placeholder="Ej: Centro de Convenciones de Puerto Rico"
-                  required
-                />
+                <Label htmlFor="location">
+                  Ubicación *{" "}
+                  {isValidUrl(formData.location) && <span className="text-xs text-blue-600 ml-1">(URL detectada)</span>}
+                </Label>
+                <div className="flex">
+                  <Input
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    placeholder="Ej: Centro de Convenciones de Puerto Rico o https://maps.google.com/..."
+                    required
+                    className={isValidUrl(formData.location) ? "pr-10" : ""}
+                  />
+                  {isValidUrl(formData.location) && (
+                    <a
+                      href={formData.location}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 flex items-center text-blue-600 hover:text-blue-800"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Puede ingresar una dirección física o un enlace a Google Maps, Waze, etc.
+                </p>
               </div>
 
               <div className="space-y-2 sm:col-span-2">
@@ -268,6 +334,50 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
                   rows={4}
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maxAttendees">Número máximo de asistentes</Label>
+                <Input
+                  id="maxAttendees"
+                  name="maxAttendees"
+                  type="number"
+                  value={formData.maxAttendees}
+                  onChange={handleInputChange}
+                  placeholder="Dejar en blanco si no hay límite"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 h-full pt-6">
+                  <Switch id="isPublic" checked={isPublic} onCheckedChange={setIsPublic} />
+                  <Label htmlFor="isPublic">Permitir registro público</Label>
+                </div>
+              </div>
+
+              {isPublic && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="shareableSlug">
+                    Enlace compartible (se generará automáticamente si se deja en blanco)
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id="shareableSlug"
+                      name="shareableSlug"
+                      value={formData.shareableSlug}
+                      onChange={handleInputChange}
+                      placeholder="Ej: torneo-futsal-2025"
+                    />
+                    <Button type="button" variant="outline" onClick={generateShareableSlug}>
+                      Generar
+                    </Button>
+                  </div>
+                  {formData.shareableSlug && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      URL: {window.location.origin}/eventos/{formData.shareableSlug}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2 sm:col-span-2">
                 <div className="flex items-center space-x-2">

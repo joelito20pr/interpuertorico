@@ -82,6 +82,24 @@ async function createTables() {
       "requiresPayment" BOOLEAN DEFAULT FALSE,
       price TEXT,
       "stripeLink" TEXT,
+      "shareableSlug" TEXT UNIQUE,
+      "maxAttendees" INTEGER,
+      "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+  `
+
+  // Create EventRegistration table if it doesn't exist
+  await db`
+    CREATE TABLE IF NOT EXISTS "EventRegistration" (
+      id TEXT PRIMARY KEY,
+      "eventId" TEXT REFERENCES "Event"(id),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      "numberOfAttendees" INTEGER DEFAULT 1,
+      "paymentStatus" TEXT DEFAULT 'PENDING',
+      "paymentReference" TEXT,
       "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     )

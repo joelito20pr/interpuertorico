@@ -129,6 +129,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         "requiresPayment" = ${eventData.requiresPayment || false},
         price = ${eventData.price || null},
         "stripeLink" = ${eventData.stripeLink || null},
+        "shareableSlug" = ${eventData.shareableSlug || null},
+        "maxAttendees" = ${eventData.maxAttendees || null},
         "updatedAt" = NOW()
       WHERE id = ${id}
       RETURNING *

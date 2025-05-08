@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const result = await db`
       INSERT INTO "Event" (
         id, title, description, date, location, 
-        "requiresPayment", price, "stripeLink", "createdAt", "updatedAt"
+        "requiresPayment", price, "stripeLink", "shareableSlug", "maxAttendees", "createdAt", "updatedAt"
       ) VALUES (
         ${id}, 
         ${eventData.title}, 
@@ -82,7 +82,9 @@ export async function POST(request: Request) {
         ${eventData.location},
         ${eventData.requiresPayment || false}, 
         ${eventData.price || null}, 
-        ${eventData.stripeLink || null}, 
+        ${eventData.stripeLink || null},
+        ${eventData.shareableSlug || null},
+        ${eventData.maxAttendees || null},
         NOW(), 
         NOW()
       )
