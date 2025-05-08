@@ -1,28 +1,24 @@
 import { neon } from "@neondatabase/serverless"
-import { sql } from "@vercel/postgres"
 
-// Crear un cliente SQL con manejo de errores
-let dbClient
+// Create a SQL client with consistent error handling
+let db
 try {
-  dbClient = neon(process.env.DATABASE_URL!)
-  console.log("Conexión a la base de datos establecida correctamente")
+  db = neon(process.env.DATABASE_URL!)
+  console.log("Database connection established successfully")
 } catch (error) {
-  console.error("Error al conectar con la base de datos:", error)
-  // Fallback a un cliente vacío que no hará nada
-  dbClient = {
-    query: async () => ({ rows: [] }),
-  }
+  console.error("Error connecting to database:", error)
+  throw new Error("Failed to connect to database")
 }
 
-export const db = dbClient
+export { db }
 
 // User functions
 export async function getUserByEmail(email: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "User" WHERE email = ${email} LIMIT 1
     `
-    return result.rows[0] || null
+    return result[0] || null
   } catch (error) {
     console.error("Error getting user by email:", error)
     return null
@@ -33,28 +29,28 @@ export async function getUserByEmail(email: string) {
 export async function getDashboardStats() {
   try {
     // Get event count
-    const eventCountResult = await sql`SELECT COUNT(*) as count FROM "Event"`
-    const eventCount = Number.parseInt(eventCountResult.rows[0]?.count || "0")
+    const eventCountResult = await db`SELECT COUNT(*) as count FROM "Event"`
+    const eventCount = Number.parseInt(eventCountResult[0]?.count || "0")
 
     // Get team count
-    const teamCountResult = await sql`SELECT COUNT(*) as count FROM "Team"`
-    const teamCount = Number.parseInt(teamCountResult.rows[0]?.count || "0")
+    const teamCountResult = await db`SELECT COUNT(*) as count FROM "Team"`
+    const teamCount = Number.parseInt(teamCountResult[0]?.count || "0")
 
     // Get member count
-    const memberCountResult = await sql`SELECT COUNT(*) as count FROM "Member"`
-    const memberCount = Number.parseInt(memberCountResult.rows[0]?.count || "0")
+    const memberCountResult = await db`SELECT COUNT(*) as count FROM "Member"`
+    const memberCount = Number.parseInt(memberCountResult[0]?.count || "0")
 
     // Get sponsor count and total amount
-    const sponsorResult = await sql`
+    const sponsorResult = await db`
       SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total 
       FROM "Sponsor" 
       WHERE "paymentStatus" = 'PAID'
     `
-    const sponsorCount = Number.parseInt(sponsorResult.rows[0]?.count || "0")
-    const totalAmount = Number.parseFloat(sponsorResult.rows[0]?.total || "0")
+    const sponsorCount = Number.parseInt(sponsorResult[0]?.count || "0")
+    const totalAmount = Number.parseFloat(sponsorResult[0]?.total || "0")
 
     // Get recent sponsors
-    const recentSponsors = await sql`
+    const recentSponsors = await db`
       SELECT id, name, amount, "paymentDate", tier
       FROM "Sponsor"
       WHERE "paymentStatus" = 'PAID'
@@ -63,7 +59,7 @@ export async function getDashboardStats() {
     `
 
     // Get upcoming events
-    const upcomingEvents = await sql`
+    const upcomingEvents = await db`
       SELECT id, title, date, location
       FROM "Event"
       WHERE date > NOW()
@@ -77,9 +73,9 @@ export async function getDashboardStats() {
       memberCount,
       sponsorCount,
       totalAmount,
-      recentSponsors: recentSponsors.rows || [],
-      upcomingEvents: upcomingEvents.rows || [],
-      goalAmount: 5000, // Meta fija por ahora
+      recentSponsors: recentSponsors || [],
+      upcomingEvents: upcomingEvents || [],
+      goalAmount: 5000, // Fixed goal for now
     }
   } catch (error) {
     console.error("Error getting dashboard stats:", error)
@@ -99,11 +95,11 @@ export async function getDashboardStats() {
 // Event functions
 export async function getAllEvents() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Event"
       ORDER BY date DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting all events:", error)
     return []
@@ -112,10 +108,10 @@ export async function getAllEvents() {
 
 export async function getEventById(id: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Event" WHERE id = ${id}
     `
-    return result.rows[0] || null
+    return result[0] || null
   } catch (error) {
     console.error("Error getting event by id:", error)
     return null
@@ -133,7 +129,7 @@ export async function createEvent(eventData: {
 }) {
   try {
     const id = `event_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Event" (
         id, title, description, date, location, 
         "requiresPayment", price, "stripeLink", "createdAt", "updatedAt"
@@ -143,7 +139,7 @@ export async function createEvent(eventData: {
       )
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error creating event:", error)
     throw error
@@ -163,7 +159,7 @@ export async function updateEvent(
   },
 ) {
   try {
-    const result = await sql`
+    const result = await db`
       UPDATE "Event"
       SET 
         title = ${eventData.title},
@@ -177,7 +173,7 @@ export async function updateEvent(
       WHERE id = ${id}
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error updating event:", error)
     throw error
@@ -186,7 +182,7 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string) {
   try {
-    await sql`DELETE FROM "Event" WHERE id = ${id}`
+    await db`DELETE FROM "Event" WHERE id = ${id}`
     return true
   } catch (error) {
     console.error("Error deleting event:", error)
@@ -197,11 +193,11 @@ export async function deleteEvent(id: string) {
 // Team functions
 export async function getAllTeams() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Team"
       ORDER BY "createdAt" DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting all teams:", error)
     return []
@@ -210,10 +206,10 @@ export async function getAllTeams() {
 
 export async function getTeamById(id: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Team" WHERE id = ${id}
     `
-    return result.rows[0] || null
+    return result[0] || null
   } catch (error) {
     console.error("Error getting team by id:", error)
     return null
@@ -227,12 +223,12 @@ export async function createTeam(teamData: {
 }) {
   try {
     const id = `team_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Team" (id, name, category, description, "createdAt", "updatedAt")
       VALUES (${id}, ${teamData.name}, ${teamData.category}, ${teamData.description}, NOW(), NOW())
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error creating team:", error)
     throw error
@@ -248,7 +244,7 @@ export async function updateTeam(
   },
 ) {
   try {
-    const result = await sql`
+    const result = await db`
       UPDATE "Team"
       SET 
         name = ${teamData.name},
@@ -258,7 +254,7 @@ export async function updateTeam(
       WHERE id = ${id}
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error updating team:", error)
     throw error
@@ -267,7 +263,7 @@ export async function updateTeam(
 
 export async function deleteTeam(id: string) {
   try {
-    await sql`DELETE FROM "Team" WHERE id = ${id}`
+    await db`DELETE FROM "Team" WHERE id = ${id}`
     return true
   } catch (error) {
     console.error("Error deleting team:", error)
@@ -278,13 +274,13 @@ export async function deleteTeam(id: string) {
 // Member functions
 export async function getAllMembers() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT m.*, t.name as "teamName"
       FROM "Member" m
       LEFT JOIN "Team" t ON m."teamId" = t.id
       ORDER BY m."createdAt" DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting all members:", error)
     return []
@@ -293,12 +289,12 @@ export async function getAllMembers() {
 
 export async function getMembersByTeam(teamId: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Member"
       WHERE "teamId" = ${teamId}
       ORDER BY "createdAt" DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting members by team:", error)
     return []
@@ -307,10 +303,10 @@ export async function getMembersByTeam(teamId: string) {
 
 export async function getMemberByEmail(email: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Member" WHERE email = ${email} LIMIT 1
     `
-    return result.rows[0] || null
+    return result[0] || null
   } catch (error) {
     console.error("Error getting member by email:", error)
     return null
@@ -330,7 +326,7 @@ export async function createMember(memberData: {
 }) {
   try {
     const id = `member_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Member" (
         id, "teamId", name, "parentName", email, phone, 
         "isPlayer", "isParent", "previousClub", password, "createdAt", "updatedAt"
@@ -341,7 +337,7 @@ export async function createMember(memberData: {
       )
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error creating member:", error)
     throw error
@@ -351,14 +347,14 @@ export async function createMember(memberData: {
 // Post and message functions
 export async function getAllPosts() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT p.*, u.name as "authorName", t.name as "teamName"
       FROM "Post" p
       LEFT JOIN "User" u ON p."authorId" = u.id
       LEFT JOIN "Team" t ON p."teamId" = t.id
       ORDER BY p."createdAt" DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting all posts:", error)
     return []
@@ -367,14 +363,14 @@ export async function getAllPosts() {
 
 export async function getPostsByTeam(teamId: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT p.*, u.name as "authorName"
       FROM "Post" p
       LEFT JOIN "User" u ON p."authorId" = u.id
       WHERE p."teamId" = ${teamId}
       ORDER BY p."createdAt" DESC
     `
-    return result.rows || []
+    return result || []
   } catch (error) {
     console.error("Error getting posts by team:", error)
     return []
@@ -390,7 +386,7 @@ export async function createPost(postData: {
 }) {
   try {
     const id = `post_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Post" (
         id, "teamId", "authorId", title, content, "isPublic", "createdAt", "updatedAt"
       ) VALUES (
@@ -399,7 +395,7 @@ export async function createPost(postData: {
       )
       RETURNING *
     `
-    return result.rows[0]
+    return result[0]
   } catch (error) {
     console.error("Error creating post:", error)
     throw error
@@ -409,8 +405,9 @@ export async function createPost(postData: {
 // Helper function for executing queries
 export async function query(text: string, params: any[] = []) {
   try {
-    const result = await sql.query(text, params)
-    return result.rows
+    // Convert the text and params to a tagged template
+    const result = await db.query(text, params)
+    return result
   } catch (error) {
     console.error("Error executing query:", error)
     return []

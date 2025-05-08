@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server"
-import { sql } from "@vercel/postgres"
+import { db } from "@/lib/db"
 
 export async function GET() {
   try {
-    // Verificar conexión a la base de datos
-    const testConnection = await sql`SELECT NOW() as time`
-    console.log("Conexión a la base de datos exitosa:", testConnection.rows[0])
+    // Verify database connection
+    const testConnection = await db`SELECT NOW() as time`
+    console.log("Database connection successful:", testConnection[0])
 
-    // Crear tablas si no existen
+    // Create tables if they don't exist
     await createTables()
 
     return NextResponse.json({
       success: true,
-      message: "Base de datos configurada correctamente",
+      message: "Database configured successfully",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("Error al configurar la base de datos:", error)
+    console.error("Error configuring database:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Error al configurar la base de datos",
+        error: "Error configuring database",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
@@ -29,8 +29,8 @@ export async function GET() {
 }
 
 async function createTables() {
-  // Crear tabla User si no existe
-  await sql`
+  // Create User table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "User" (
       id TEXT PRIMARY KEY,
       name TEXT,
@@ -41,8 +41,8 @@ async function createTables() {
     )
   `
 
-  // Crear tabla Team si no existe
-  await sql`
+  // Create Team table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "Team" (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -53,8 +53,8 @@ async function createTables() {
     )
   `
 
-  // Crear tabla Member si no existe
-  await sql`
+  // Create Member table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "Member" (
       id TEXT PRIMARY KEY,
       "teamId" TEXT REFERENCES "Team"(id),
@@ -71,8 +71,8 @@ async function createTables() {
     )
   `
 
-  // Crear tabla Event si no existe
-  await sql`
+  // Create Event table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "Event" (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -87,8 +87,8 @@ async function createTables() {
     )
   `
 
-  // Crear tabla Sponsor si no existe
-  await sql`
+  // Create Sponsor table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "Sponsor" (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -104,8 +104,8 @@ async function createTables() {
     )
   `
 
-  // Crear tabla Post si no existe
-  await sql`
+  // Create Post table if it doesn't exist
+  await db`
     CREATE TABLE IF NOT EXISTS "Post" (
       id TEXT PRIMARY KEY,
       "teamId" TEXT REFERENCES "Team"(id),
@@ -118,15 +118,15 @@ async function createTables() {
     )
   `
 
-  // Insertar usuario admin si no existe
-  const adminExists = await sql`SELECT * FROM "User" WHERE email = 'admin@interpr.com'`
-  if (adminExists.rowCount === 0) {
-    // Contraseña: admin123 (hash bcrypt)
-    await sql`
+  // Insert admin user if it doesn't exist
+  const adminExists = await db`SELECT * FROM "User" WHERE email = 'admin@interpr.com'`
+  if (adminExists.length === 0) {
+    // Password: admin123 (bcrypt hash)
+    await db`
       INSERT INTO "User" (id, name, email, password)
       VALUES ('user_admin', 'Administrador', 'admin@interpr.com', '$2a$10$zQSMW7UiBD0OMXVVrRjEVeIY.6P1D1hGcTylTGcqQW.JOtXyFwXHa')
     `
   }
 
-  console.log("Tablas creadas correctamente")
+  console.log("Tables created successfully")
 }

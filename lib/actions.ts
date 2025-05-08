@@ -4,38 +4,38 @@ import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
 import { getServerSession as getServerSessionNext } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { sql } from "@vercel/postgres"
+import { db } from "@/lib/db"
 
 // Dashboard actions
 export async function getDashboardData() {
   try {
-    // Verificar conexión a la base de datos
-    await sql`SELECT NOW() as time`
+    // Verify database connection
+    await db`SELECT NOW() as time`
 
-    // Obtener estadísticas
+    // Get statistics
     // Get event count
-    const eventCountResult = await sql`SELECT COUNT(*) as count FROM "Event"`
-    const eventCount = Number.parseInt(eventCountResult.rows[0]?.count || "0")
+    const eventCountResult = await db`SELECT COUNT(*) as count FROM "Event"`
+    const eventCount = Number.parseInt(eventCountResult[0]?.count || "0")
 
     // Get team count
-    const teamCountResult = await sql`SELECT COUNT(*) as count FROM "Team"`
-    const teamCount = Number.parseInt(teamCountResult.rows[0]?.count || "0")
+    const teamCountResult = await db`SELECT COUNT(*) as count FROM "Team"`
+    const teamCount = Number.parseInt(teamCountResult[0]?.count || "0")
 
     // Get member count
-    const memberCountResult = await sql`SELECT COUNT(*) as count FROM "Member"`
-    const memberCount = Number.parseInt(memberCountResult.rows[0]?.count || "0")
+    const memberCountResult = await db`SELECT COUNT(*) as count FROM "Member"`
+    const memberCount = Number.parseInt(memberCountResult[0]?.count || "0")
 
     // Get sponsor count and total amount
-    const sponsorResult = await sql`
+    const sponsorResult = await db`
       SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total 
       FROM "Sponsor" 
       WHERE "paymentStatus" = 'PAID'
     `
-    const sponsorCount = Number.parseInt(sponsorResult.rows[0]?.count || "0")
-    const totalAmount = Number.parseFloat(sponsorResult.rows[0]?.total || "0")
+    const sponsorCount = Number.parseInt(sponsorResult[0]?.count || "0")
+    const totalAmount = Number.parseFloat(sponsorResult[0]?.total || "0")
 
     // Get recent sponsors
-    const recentSponsors = await sql`
+    const recentSponsors = await db`
       SELECT id, name, amount, "paymentDate", tier
       FROM "Sponsor"
       WHERE "paymentStatus" = 'PAID'
@@ -44,7 +44,7 @@ export async function getDashboardData() {
     `
 
     // Get upcoming events
-    const upcomingEvents = await sql`
+    const upcomingEvents = await db`
       SELECT id, title, date, location
       FROM "Event"
       WHERE date > NOW()
@@ -60,34 +60,34 @@ export async function getDashboardData() {
         memberCount,
         sponsorCount,
         totalAmount,
-        recentSponsors: recentSponsors.rows || [],
-        upcomingEvents: upcomingEvents.rows || [],
-        goalAmount: 5000, // Meta fija por ahora
+        recentSponsors: recentSponsors || [],
+        upcomingEvents: upcomingEvents || [],
+        goalAmount: 5000, // Fixed goal for now
       },
     }
   } catch (error) {
-    console.error("Error al obtener datos del dashboard:", error)
+    console.error("Error getting dashboard data:", error)
     return {
       success: false,
-      error: "Error al cargar los datos del dashboard",
+      error: "Error loading dashboard data",
       details: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-// Acciones para eventos
+// Event actions
 export async function getEvents() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Event"
       ORDER BY date DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener eventos:", error)
+    console.error("Error getting events:", error)
     return {
       success: false,
-      error: "Error al cargar los eventos",
+      error: "Error loading events",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -104,7 +104,7 @@ export async function createEvent(eventData: {
 }) {
   try {
     const id = `event_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Event" (
         id, title, description, date, location, 
         "requiresPayment", price, "stripeLink", "createdAt", "updatedAt"
@@ -116,12 +116,12 @@ export async function createEvent(eventData: {
     `
 
     revalidatePath("/dashboard/eventos")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al crear evento:", error)
+    console.error("Error creating event:", error)
     return {
       success: false,
-      error: "Error al crear el evento",
+      error: "Error creating event",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -140,7 +140,7 @@ export async function updateEvent(
   },
 ) {
   try {
-    const result = await sql`
+    const result = await db`
       UPDATE "Event"
       SET 
         title = ${eventData.title},
@@ -157,12 +157,12 @@ export async function updateEvent(
 
     revalidatePath(`/dashboard/eventos/${id}`)
     revalidatePath("/dashboard/eventos")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al actualizar evento:", error)
+    console.error("Error updating event:", error)
     return {
       success: false,
-      error: "Error al actualizar el evento",
+      error: "Error updating event",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -170,33 +170,33 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string) {
   try {
-    await sql`DELETE FROM "Event" WHERE id = ${id}`
+    await db`DELETE FROM "Event" WHERE id = ${id}`
 
     revalidatePath("/dashboard/eventos")
     return { success: true }
   } catch (error) {
-    console.error("Error al eliminar evento:", error)
+    console.error("Error deleting event:", error)
     return {
       success: false,
-      error: "Error al eliminar el evento",
+      error: "Error deleting event",
       details: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-// Acciones para equipos
+// Team actions
 export async function getTeams() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Team"
       ORDER BY "createdAt" DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener equipos:", error)
+    console.error("Error getting teams:", error)
     return {
       success: false,
-      error: "Error al cargar los equipos",
+      error: "Error loading teams",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -209,19 +209,19 @@ export async function createTeam(teamData: {
 }) {
   try {
     const id = `team_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Team" (id, name, category, description, "createdAt", "updatedAt")
       VALUES (${id}, ${teamData.name}, ${teamData.category}, ${teamData.description}, NOW(), NOW())
       RETURNING *
     `
 
     revalidatePath("/dashboard/equipos")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al crear equipo:", error)
+    console.error("Error creating team:", error)
     return {
       success: false,
-      error: "Error al crear el equipo",
+      error: "Error creating team",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -236,7 +236,7 @@ export async function updateTeam(
   },
 ) {
   try {
-    const result = await sql`
+    const result = await db`
       UPDATE "Team"
       SET 
         name = ${teamData.name},
@@ -249,12 +249,12 @@ export async function updateTeam(
 
     revalidatePath(`/dashboard/equipos/${id}`)
     revalidatePath("/dashboard/equipos")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al actualizar equipo:", error)
+    console.error("Error updating team:", error)
     return {
       success: false,
-      error: "Error al actualizar el equipo",
+      error: "Error updating team",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -262,35 +262,35 @@ export async function updateTeam(
 
 export async function deleteTeam(id: string) {
   try {
-    await sql`DELETE FROM "Team" WHERE id = ${id}`
+    await db`DELETE FROM "Team" WHERE id = ${id}`
 
     revalidatePath("/dashboard/equipos")
     return { success: true }
   } catch (error) {
-    console.error("Error al eliminar equipo:", error)
+    console.error("Error deleting team:", error)
     return {
       success: false,
-      error: "Error al eliminar el equipo",
+      error: "Error deleting team",
       details: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-// Acciones para miembros
+// Member actions
 export async function getMembers() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT m.*, t.name as "teamName"
       FROM "Member" m
       LEFT JOIN "Team" t ON m."teamId" = t.id
       ORDER BY m."createdAt" DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener miembros:", error)
+    console.error("Error getting members:", error)
     return {
       success: false,
-      error: "Error al cargar los miembros",
+      error: "Error loading members",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -298,17 +298,17 @@ export async function getMembers() {
 
 export async function getMembersByTeam(teamId: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Member"
       WHERE "teamId" = ${teamId}
       ORDER BY "createdAt" DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener miembros del equipo:", error)
+    console.error("Error getting team members:", error)
     return {
       success: false,
-      error: "Error al cargar los miembros del equipo",
+      error: "Error loading team members",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -332,7 +332,7 @@ export async function createMember(data: {
     }
 
     const id = `member_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Member" (
         id, "teamId", name, "parentName", email, phone, 
         "isPlayer", "isParent", "previousClub", password, "createdAt", "updatedAt"
@@ -346,33 +346,33 @@ export async function createMember(data: {
 
     revalidatePath(`/dashboard/equipos/${data.teamId}`)
     revalidatePath("/dashboard/equipos")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al crear miembro:", error)
+    console.error("Error creating member:", error)
     return {
       success: false,
-      error: "Error al crear el miembro",
+      error: "Error creating member",
       details: error instanceof Error ? error.message : String(error),
     }
   }
 }
 
-// Acciones para mensajes
+// Post actions
 export async function getPosts() {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT p.*, u.name as "authorName", t.name as "teamName"
       FROM "Post" p
       LEFT JOIN "User" u ON p."authorId" = u.id
       LEFT JOIN "Team" t ON p."teamId" = t.id
       ORDER BY p."createdAt" DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener mensajes:", error)
+    console.error("Error getting posts:", error)
     return {
       success: false,
-      error: "Error al cargar los mensajes",
+      error: "Error loading posts",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -380,19 +380,19 @@ export async function getPosts() {
 
 export async function getPostsByTeam(teamId: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT p.*, u.name as "authorName"
       FROM "Post" p
       LEFT JOIN "User" u ON p."authorId" = u.id
       WHERE p."teamId" = ${teamId}
       ORDER BY p."createdAt" DESC
     `
-    return { success: true, data: result.rows || [] }
+    return { success: true, data: result || [] }
   } catch (error) {
-    console.error("Error al obtener mensajes del equipo:", error)
+    console.error("Error getting team posts:", error)
     return {
       success: false,
-      error: "Error al cargar los mensajes del equipo",
+      error: "Error loading team posts",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -405,14 +405,14 @@ export async function createPost(data: {
   isPublic: boolean
 }) {
   try {
-    // Obtener el usuario actual
+    // Get current user
     const session = await getServerSessionNext(authOptions)
     if (!session?.user?.id) {
-      return { success: false, error: "No autorizado" }
+      return { success: false, error: "Unauthorized" }
     }
 
     const id = `post_${Date.now()}`
-    const result = await sql`
+    const result = await db`
       INSERT INTO "Post" (
         id, "teamId", "authorId", title, content, "isPublic", "createdAt", "updatedAt"
       ) VALUES (
@@ -424,12 +424,12 @@ export async function createPost(data: {
 
     revalidatePath(`/dashboard/equipos/${data.teamId}`)
     revalidatePath("/dashboard/mensajes")
-    return { success: true, data: result.rows[0] }
+    return { success: true, data: result[0] }
   } catch (error) {
-    console.error("Error al crear mensaje:", error)
+    console.error("Error creating post:", error)
     return {
       success: false,
-      error: "Error al crear el mensaje",
+      error: "Error creating post",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -437,15 +437,15 @@ export async function createPost(data: {
 
 export async function getEventById(id: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Event" WHERE id = ${id}
     `
-    return { success: true, data: result.rows[0] || null }
+    return { success: true, data: result[0] || null }
   } catch (error) {
-    console.error("Error al obtener evento:", error)
+    console.error("Error getting event:", error)
     return {
       success: false,
-      error: "Error al cargar el evento",
+      error: "Error loading event",
       details: error instanceof Error ? error.message : String(error),
     }
   }
@@ -453,15 +453,15 @@ export async function getEventById(id: string) {
 
 export async function getTeamById(id: string) {
   try {
-    const result = await sql`
+    const result = await db`
       SELECT * FROM "Team" WHERE id = ${id}
     `
-    return { success: true, data: result.rows[0] || null }
+    return { success: true, data: result[0] || null }
   } catch (error) {
-    console.error("Error al obtener equipo:", error)
+    console.error("Error getting team:", error)
     return {
       success: false,
-      error: "Error al cargar el equipo",
+      error: "Error loading team",
       details: error instanceof Error ? error.message : String(error),
     }
   }
