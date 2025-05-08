@@ -3,11 +3,24 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Trash, AlertCircle, Copy, Check, Share2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
+  Edit,
+  Trash,
+  AlertCircle,
+  Copy,
+  Check,
+  Share2,
+  RefreshCw,
+} from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { LocationDisplay } from "@/components/location-display"
 import { useToast } from "@/components/ui/use-toast"
@@ -21,54 +34,82 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
   const [registrationCount, setRegistrationCount] = useState(0)
   const [copied, setCopied] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [responseDetails, setResponseDetails] = useState<string | null>(null)
+
+  const loadEvent = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      setResponseDetails(null)
+      console.log(`Loading event with ID: ${params.id}`)
+
+      const response = await fetch(`/api/events/${params.id}`)
+
+      // Store the status for debugging
+      const status = response.status
+      const statusText = response.statusText
+
+      // Try to parse the response as JSON
+      let responseBody = null
+      try {
+        responseBody = await response.json()
+      } catch (e) {
+        console.error("Failed to parse response as JSON:", e)
+      }
+
+      // Set detailed response info for debugging
+      setResponseDetails(`Status: ${status} ${statusText}
+Response: ${responseBody ? JSON.stringify(responseBody, null, 2) : "No JSON response"}`)
+
+      if (status === 404) {
+        setError(
+          `Evento no encontrado (ID: ${params.id}). Es posible que haya sido eliminado o que la URL sea incorrecta.`,
+        )
+        setIsLoading(false)
+        return
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${status}`)
+      }
+
+      if (responseBody && responseBody.success) {
+        setEvent(responseBody.data)
+
+        // Cargar conteo de registros
+        try {
+          const regResponse = await fetch(`/api/events/${params.id}/registrations`)
+          if (regResponse.ok) {
+            const regResult = await regResponse.json()
+            if (regResult.success) {
+              setRegistrationCount(regResult.data.totalRegistrations)
+            }
+          }
+        } catch (regError) {
+          console.error("Error loading registrations:", regError)
+          // Don't set an error for this, just log it
+        }
+      } else {
+        setError(responseBody?.error || "Error al cargar el evento")
+      }
+    } catch (error) {
+      console.error("Error loading event:", error)
+      setError(`Error al cargar el evento: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    async function loadEvent() {
-      try {
-        console.log(`Loading event with ID: ${params.id}`)
-        const response = await fetch(`/api/events/${params.id}`)
-
-        if (response.status === 404) {
-          setError("Evento no encontrado. Es posible que haya sido eliminado o que la URL sea incorrecta.")
-          setIsLoading(false)
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const result = await response.json()
-
-        if (result.success) {
-          setEvent(result.data)
-
-          // Cargar conteo de registros
-          try {
-            const regResponse = await fetch(`/api/events/${params.id}/registrations`)
-            if (regResponse.ok) {
-              const regResult = await regResponse.json()
-              if (regResult.success) {
-                setRegistrationCount(regResult.data.totalRegistrations)
-              }
-            }
-          } catch (regError) {
-            console.error("Error loading registrations:", regError)
-            // Don't set an error for this, just log it
-          }
-        } else {
-          setError(result.error || "Error al cargar el evento")
-        }
-      } catch (error) {
-        console.error("Error loading event:", error)
-        setError(`Error al cargar el evento: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     loadEvent()
   }, [params.id])
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    loadEvent()
+  }
 
   const handleDelete = async () => {
     if (!confirm("¿Estás seguro de que deseas eliminar este evento? Esta acción no se puede deshacer.")) {
@@ -142,9 +183,54 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <div className="flex justify-center mt-4">
-          <Button onClick={() => router.push("/dashboard/eventos")}>Ver todos los eventos</Button>
-        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Opciones de diagnóstico</CardTitle>
+            <CardDescription>Herramientas para solucionar problemas</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button onClick={handleRefresh} disabled={isRefreshing}>
+                {isRefreshing ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Actualizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Intentar de nuevo
+                  </>
+                )}
+              </Button>
+
+              <Button variant="outline" asChild>
+                <Link href="/api/debug/list-events">Ver todos los eventos</Link>
+              </Button>
+
+              <Button variant="outline" asChild>
+                <Link href="/api/debug/fix-event-ids">Reparar IDs de eventos</Link>
+              </Button>
+
+              <Button variant="outline" asChild>
+                <Link href="/api/repair-database">Reparar base de datos</Link>
+              </Button>
+            </div>
+
+            {responseDetails && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium mb-2">Detalles de la respuesta:</h3>
+                <pre className="bg-gray-100 p-4 rounded-md text-xs overflow-auto max-h-60">{responseDetails}</pre>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button onClick={() => router.push("/dashboard/eventos")} className="w-full">
+              Ver todos los eventos
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     )
   }
