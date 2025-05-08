@@ -33,17 +33,20 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
   useEffect(() => {
     async function loadEvent() {
       try {
+        console.log("Fetching event with slug:", params.slug)
         const response = await fetch(`/api/events/slug/${params.slug}`)
 
         if (!response.ok) {
+          console.error("API response not OK:", response.status)
           throw new Error(`HTTP error! status: ${response.status}`)
         }
 
         const result = await response.json()
+        console.log("API response:", result)
 
         if (result.success) {
-          setEvent(result.data.event)
-          setRegistrationCount(result.data.registrationCount)
+          setEvent(result.data)
+          setRegistrationCount(result.data.registrationsCount || 0)
         } else {
           setError(result.error || "Error al cargar el evento")
         }
