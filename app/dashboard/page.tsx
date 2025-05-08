@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { DollarSign, Users, Calendar, TrendingUp, ArrowRight, ChevronRight } from "lucide-react"
+import { DollarSign, Users, Calendar, TrendingUp, ArrowRight, ChevronRight, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { getDashboardData } from "@/lib/actions"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -27,12 +28,15 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboardData() {
       try {
+        console.log("Fetching dashboard data...")
         const result = await getDashboardData()
+        console.log("Dashboard data result:", result)
 
         if (result.success && result.data) {
           setStats(result.data)
         } else {
           setError(result.error || "Error al cargar los datos")
+          console.error("Dashboard data error details:", result.details)
         }
       } catch (err) {
         console.error("Error loading dashboard data:", err)
@@ -68,10 +72,11 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <strong className="font-bold">Error: </strong>
-          <span className="block sm:inline">{error}</span>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Stats Cards */}

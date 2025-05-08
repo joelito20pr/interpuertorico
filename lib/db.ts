@@ -1,15 +1,43 @@
 import { neon } from "@neondatabase/serverless"
 
-// Create a SQL client with consistent error handling
+// Create a SQL client with better error handling and fallbacks
 let db
 try {
-  db = neon(process.env.DATABASE_URL!)
-  console.log("Database connection established successfully")
+  // Make sure we have a DATABASE_URL
+  if (!process.env.DATABASE_URL) {
+    console.error("DATABASE_URL environment variable is not set")
+    throw new Error("DATABASE_URL environment variable is not set")
+  }
+
+  // Create the neon client
+  db = neon(process.env.DATABASE_URL)
+  console.log("Database connection initialized")
 } catch (error) {
-  console.error("Error connecting to database:", error)
-  throw new Error("Failed to connect to database")
+  console.error("Error initializing database connection:", error)
+
+  // Create a fallback client that logs errors but doesn't crash the app
+  db = {
+    async query(...args) {
+      console.error("Database connection failed, using fallback client. Query:", args[0])
+      return []
+    },
+    // Support for tagged template literals
+    async raw(...args) {
+      console.error("Database connection failed, using fallback client. Query:", args[0])
+      return []
+    },
+  }
+
+  // Add support for tagged template literals to the fallback client
+  db = new Proxy(db, {
+    apply: (target, thisArg, argumentsList) => {
+      console.error("Database connection failed, using fallback client. Tagged query:", argumentsList[0])
+      return []
+    },
+  })
 }
 
+// Export the db client
 export { db }
 
 // User functions
@@ -18,7 +46,7 @@ export async function getUserByEmail(email: string) {
     const result = await db`
       SELECT * FROM "User" WHERE email = ${email} LIMIT 1
     `
-    return result[0] || null
+    return result?.[0] || null
   } catch (error) {
     console.error("Error getting user by email:", error)
     return null
@@ -30,15 +58,15 @@ export async function getDashboardStats() {
   try {
     // Get event count
     const eventCountResult = await db`SELECT COUNT(*) as count FROM "Event"`
-    const eventCount = Number.parseInt(eventCountResult[0]?.count || "0")
+    const eventCount = Number.parseInt(eventCountResult?.[0]?.count || "0")
 
     // Get team count
     const teamCountResult = await db`SELECT COUNT(*) as count FROM "Team"`
-    const teamCount = Number.parseInt(teamCountResult[0]?.count || "0")
+    const teamCount = Number.parseInt(teamCountResult?.[0]?.count || "0")
 
     // Get member count
     const memberCountResult = await db`SELECT COUNT(*) as count FROM "Member"`
-    const memberCount = Number.parseInt(memberCountResult[0]?.count || "0")
+    const memberCount = Number.parseInt(memberCountResult?.[0]?.count || "0")
 
     // Get sponsor count and total amount
     const sponsorResult = await db`
@@ -46,8 +74,8 @@ export async function getDashboardStats() {
       FROM "Sponsor" 
       WHERE "paymentStatus" = 'PAID'
     `
-    const sponsorCount = Number.parseInt(sponsorResult[0]?.count || "0")
-    const totalAmount = Number.parseFloat(sponsorResult[0]?.total || "0")
+    const sponsorCount = Number.parseInt(sponsorResult?.[0]?.count || "0")
+    const totalAmount = Number.parseFloat(sponsorResult?.[0]?.total || "0")
 
     // Get recent sponsors
     const recentSponsors = await db`

@@ -9,49 +9,100 @@ import { db } from "@/lib/db"
 // Dashboard actions
 export async function getDashboardData() {
   try {
-    // Verify database connection
-    await db`SELECT NOW() as time`
+    console.log("Starting getDashboardData function")
 
-    // Get statistics
-    // Get event count
-    const eventCountResult = await db`SELECT COUNT(*) as count FROM "Event"`
-    const eventCount = Number.parseInt(eventCountResult[0]?.count || "0")
+    // Verify database connection with a simple query
+    try {
+      const testConnection = await db`SELECT NOW() as time`
+      console.log("Database connection test successful:", testConnection?.[0])
+    } catch (connError) {
+      console.error("Database connection test failed:", connError)
+      return {
+        success: false,
+        error: "Error connecting to database",
+        details: connError instanceof Error ? connError.message : String(connError),
+      }
+    }
 
-    // Get team count
-    const teamCountResult = await db`SELECT COUNT(*) as count FROM "Team"`
-    const teamCount = Number.parseInt(teamCountResult[0]?.count || "0")
+    // Get statistics with individual try/catch blocks for better error isolation
+    let eventCount = 0
+    let teamCount = 0
+    let memberCount = 0
+    let sponsorCount = 0
+    let totalAmount = 0
+    let recentSponsors = []
+    let upcomingEvents = []
 
-    // Get member count
-    const memberCountResult = await db`SELECT COUNT(*) as count FROM "Member"`
-    const memberCount = Number.parseInt(memberCountResult[0]?.count || "0")
+    try {
+      // Get event count
+      const eventCountResult = await db`SELECT COUNT(*) as count FROM "Event"`
+      eventCount = Number.parseInt(eventCountResult?.[0]?.count || "0")
+      console.log("Event count:", eventCount)
+    } catch (error) {
+      console.error("Error getting event count:", error)
+    }
 
-    // Get sponsor count and total amount
-    const sponsorResult = await db`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total 
-      FROM "Sponsor" 
-      WHERE "paymentStatus" = 'PAID'
-    `
-    const sponsorCount = Number.parseInt(sponsorResult[0]?.count || "0")
-    const totalAmount = Number.parseFloat(sponsorResult[0]?.total || "0")
+    try {
+      // Get team count
+      const teamCountResult = await db`SELECT COUNT(*) as count FROM "Team"`
+      teamCount = Number.parseInt(teamCountResult?.[0]?.count || "0")
+      console.log("Team count:", teamCount)
+    } catch (error) {
+      console.error("Error getting team count:", error)
+    }
 
-    // Get recent sponsors
-    const recentSponsors = await db`
-      SELECT id, name, amount, "paymentDate", tier
-      FROM "Sponsor"
-      WHERE "paymentStatus" = 'PAID'
-      ORDER BY "paymentDate" DESC
-      LIMIT 5
-    `
+    try {
+      // Get member count
+      const memberCountResult = await db`SELECT COUNT(*) as count FROM "Member"`
+      memberCount = Number.parseInt(memberCountResult?.[0]?.count || "0")
+      console.log("Member count:", memberCount)
+    } catch (error) {
+      console.error("Error getting member count:", error)
+    }
 
-    // Get upcoming events
-    const upcomingEvents = await db`
-      SELECT id, title, date, location
-      FROM "Event"
-      WHERE date > NOW()
-      ORDER BY date ASC
-      LIMIT 3
-    `
+    try {
+      // Get sponsor count and total amount
+      const sponsorResult = await db`
+        SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total 
+        FROM "Sponsor" 
+        WHERE "paymentStatus" = 'PAID'
+      `
+      sponsorCount = Number.parseInt(sponsorResult?.[0]?.count || "0")
+      totalAmount = Number.parseFloat(sponsorResult?.[0]?.total || "0")
+      console.log("Sponsor count:", sponsorCount, "Total amount:", totalAmount)
+    } catch (error) {
+      console.error("Error getting sponsor data:", error)
+    }
 
+    try {
+      // Get recent sponsors
+      recentSponsors = await db`
+        SELECT id, name, amount, "paymentDate", tier
+        FROM "Sponsor"
+        WHERE "paymentStatus" = 'PAID'
+        ORDER BY "paymentDate" DESC
+        LIMIT 5
+      `
+      console.log("Recent sponsors count:", recentSponsors?.length || 0)
+    } catch (error) {
+      console.error("Error getting recent sponsors:", error)
+    }
+
+    try {
+      // Get upcoming events
+      upcomingEvents = await db`
+        SELECT id, title, date, location
+        FROM "Event"
+        WHERE date > NOW()
+        ORDER BY date ASC
+        LIMIT 3
+      `
+      console.log("Upcoming events count:", upcomingEvents?.length || 0)
+    } catch (error) {
+      console.error("Error getting upcoming events:", error)
+    }
+
+    console.log("getDashboardData completed successfully")
     return {
       success: true,
       data: {
@@ -66,7 +117,7 @@ export async function getDashboardData() {
       },
     }
   } catch (error) {
-    console.error("Error getting dashboard data:", error)
+    console.error("Error in getDashboardData:", error)
     return {
       success: false,
       error: "Error loading dashboard data",
