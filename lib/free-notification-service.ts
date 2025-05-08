@@ -37,13 +37,24 @@ const freeConfig = {
 // Función para generar un enlace de WhatsApp
 export function generateWhatsAppLink(phone: string, message: string): string {
   // Formatear el número de teléfono (eliminar espacios, guiones, etc.)
-  const formattedPhone = phone.replace(/[\s-$$$$]/g, "")
+  let formattedPhone = phone.replace(/[\s-()]/g, "")
+
+  // Asegurarse de que el número tenga el formato internacional con +
+  if (!formattedPhone.startsWith("+")) {
+    // Si comienza con 1, añadir el +
+    if (formattedPhone.startsWith("1")) {
+      formattedPhone = "+" + formattedPhone
+    } else {
+      // Si no comienza con código de país, asumir que es de Puerto Rico (+1)
+      formattedPhone = "+1" + formattedPhone
+    }
+  }
 
   // Codificar el mensaje para URL
   const encodedMessage = encodeURIComponent(message)
 
   // Generar el enlace
-  return `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+  return `https://wa.me/${formattedPhone.replace("+", "")}?text=${encodedMessage}`
 }
 
 // Función para enviar Email usando Nodemailer con cuenta gratuita
@@ -65,12 +76,20 @@ async function sendFreeEmail(to: string, subject: string, htmlContent: string) {
       },
     })
 
-    // Enviar el email
+    // Enviar el email con configuraciones para evitar spam
     const info = await transporter.sendMail({
       from: from || user,
       to,
       subject,
       html: htmlContent,
+      headers: {
+        "X-Priority": "1", // Alta prioridad
+        "X-MSMail-Priority": "High",
+        Importance: "High",
+        "X-Mailer": "Inter Puerto Rico Notification System",
+      },
+      // Añadir texto plano para mejorar la entrega
+      text: htmlContent.replace(/<[^>]*>?/gm, ""),
     })
 
     return { success: true, messageId: info.messageId }
@@ -100,8 +119,9 @@ function createNotificationContent(
   // Nombre del destinatario (encargado o jugador)
   const recipientName = recipient.guardianName || recipient.name
 
-  // URL del evento
-  const eventUrl = event.slug ? `${process.env.NEXT_PUBLIC_APP_URL}/eventos/${event.slug}` : ""
+  // URL del evento - Usar el dominio correcto
+  const baseUrl = "https://www.interprfc.com"
+  const eventUrl = event.slug ? `${baseUrl}/eventos/${event.slug}` : ""
 
   // Contenido según el tipo de notificación
   if (type === "registration") {
@@ -121,7 +141,13 @@ function createNotificationContent(
           <li><strong>Jugador:</strong> ${recipient.name}</li>
         </ul>
         ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
-        <p>Te enviaremos recordatorios antes del evento.</p>
+        
+        <div style="margin: 20px 0; text-align: center;">
+          <p>¿Confirmas tu asistencia al evento?</p>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=yes" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">Sí, asistiré</a>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=no" style="display: inline-block; background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">No podré asistir</a>
+        </div>
+        
         <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
       </div>
     `
@@ -143,6 +169,13 @@ function createNotificationContent(
           <li><strong>Ubicación:</strong> ${event.location}</li>
         </ul>
         ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
+        
+        <div style="margin: 20px 0; text-align: center;">
+          <p>¿Confirmas tu asistencia al evento?</p>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=yes" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">Sí, asistiré</a>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=no" style="display: inline-block; background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">No podré asistir</a>
+        </div>
+        
         <p>¡Esperamos verte allí!</p>
         <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
       </div>
@@ -166,6 +199,13 @@ function createNotificationContent(
           <li><strong>Ubicación:</strong> ${event.location}</li>
         </ul>
         ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
+        
+        <div style="margin: 20px 0; text-align: center;">
+          <p>¿Confirmas tu asistencia al evento?</p>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=yes" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">Sí, asistiré</a>
+          <a href="${baseUrl}/api/events/confirm/${event.id}?email=${encodeURIComponent(recipient.email)}&confirm=no" style="display: inline-block; background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">No podré asistir</a>
+        </div>
+        
         <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
       </div>
     `

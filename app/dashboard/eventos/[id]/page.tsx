@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Trash, AlertCircle, Copy, Check, Share2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { LocationDisplay } from "@/components/location-display"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function EventoDetallePage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -18,6 +19,8 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
   const [event, setEvent] = useState<any>(null)
   const [registrationCount, setRegistrationCount] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     async function loadEvent() {
@@ -88,6 +91,56 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
       navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  // Función para guardar los cambios del evento
+  const handleSubmit = async (formData: FormData) => {
+    setIsSubmitting(true)
+    setError("")
+
+    try {
+      // Construir el objeto de datos del evento
+      const eventData = {
+        title: formData.get("title") as string,
+        description: formData.get("description") as string,
+        date: new Date(formData.get("date") as string),
+        location: formData.get("location") as string,
+        requiresPayment: formData.get("requiresPayment") === "on",
+        price: formData.get("price") as string,
+        stripeLink: formData.get("stripeLink") as string,
+        isPublic: formData.get("isPublic") === "on",
+        shareableSlug: formData.get("shareableSlug") as string,
+        maxAttendees: formData.get("maxAttendees") ? Number.parseInt(formData.get("maxAttendees") as string) : null,
+      }
+
+      // Enviar la solicitud PUT a la API
+      const response = await fetch(`/api/events/${params.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(eventData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error al actualizar el evento")
+      }
+
+      // Mostrar mensaje de éxito
+      toast({
+        title: "Evento actualizado",
+        description: "El evento ha sido actualizado correctamente.",
+      })
+
+      // Redirigir a la lista de eventos
+      router.push("/dashboard/eventos")
+    } catch (error) {
+      console.error("Error updating event:", error)
+      setError(error instanceof Error ? error.message : "Error desconocido")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
