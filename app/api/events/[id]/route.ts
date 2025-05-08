@@ -77,35 +77,80 @@ export async function GET(request: Request, { params }: { params: { id: string }
           success: false,
           error: "Database connection failed",
           details: connectionTest.error,
+          recommendation: "Check your database connection string and make sure the database is running",
         },
         { status: 500, headers: corsHeaders },
       )
     }
 
-    // Get the event
-    const result = await db`
-      SELECT * FROM "Event" WHERE id = ${id}
+    // Check if Event table exists
+    const tableCheck = await db`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'Event'
+      ) as exists
     `
 
-    if (!result || result.length === 0) {
-      console.error(`Event with ID ${id} not found`)
+    if (!tableCheck[0]?.exists) {
+      console.error("Event table does not exist")
       return NextResponse.json(
         {
           success: false,
-          error: "Event not found",
+          error: "Event table does not exist",
+          recommendation: "Run /api/repair-database to create required tables",
         },
         { status: 404, headers: corsHeaders },
       )
     }
 
-    console.log(`Successfully retrieved event with ID: ${id}`)
-    return NextResponse.json(
-      {
-        success: true,
-        data: result[0],
-      },
-      { headers: corsHeaders },
-    )
+    // Get the event with better error handling
+    try {
+      // Log the query we're about to execute for debugging
+      console.log(`Executing query: SELECT * FROM "Event" WHERE id = ${id}`)
+
+      const result = await db`
+        SELECT * FROM "Event" WHERE id = ${id}
+      `
+
+      console.log(`Query result:`, result)
+
+      if (!result || result.length === 0) {
+        // If not found, list all available events to help debugging
+        const allEvents = await db`SELECT id, title FROM "Event" LIMIT 10`
+
+        console.error(`Event with ID ${id} not found. Available events:`, allEvents)
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Event not found",
+            message: `No event found with ID: ${id}`,
+            availableEvents: allEvents.length > 0 ? allEvents : "No events in database",
+            recommendation: "Check the event ID or create a new event",
+          },
+          { status: 404, headers: corsHeaders },
+        )
+      }
+
+      console.log(`Successfully retrieved event with ID: ${id}`)
+      return NextResponse.json(
+        {
+          success: true,
+          data: result[0],
+        },
+        { headers: corsHeaders },
+      )
+    } catch (queryError) {
+      console.error("Database query error:", queryError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database query error",
+          details: queryError instanceof Error ? queryError.message : String(queryError),
+        },
+        { status: 500, headers: corsHeaders },
+      )
+    }
   } catch (error) {
     console.error("Error getting event:", error)
     return NextResponse.json(

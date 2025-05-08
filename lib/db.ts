@@ -40,14 +40,35 @@ try {
 // Export the db client
 export { db }
 
-// Simple test function to verify database connection
+// Enhanced test function to verify database connection
 export async function testDatabaseConnection() {
   try {
+    // First check if DATABASE_URL is set
+    if (!process.env.DATABASE_URL) {
+      return {
+        success: false,
+        error: "DATABASE_URL environment variable is not set",
+        message: "Database connection failed: No connection string provided",
+      }
+    }
+
+    // Try a simple query
+    console.log("Testing database connection...")
     const result = await db`SELECT NOW() as time`
+
+    if (!result || result.length === 0) {
+      return {
+        success: false,
+        error: "Database query returned no results",
+        message: "Database connection may be working but query failed",
+      }
+    }
+
     return {
       success: true,
-      time: result?.[0]?.time,
+      time: result[0]?.time,
       message: "Database connection successful",
+      connectionString: process.env.DATABASE_URL.substring(0, 15) + "...", // Only show part of the connection string for security
     }
   } catch (error) {
     console.error("Database connection test failed:", error)
@@ -55,6 +76,7 @@ export async function testDatabaseConnection() {
       success: false,
       error: error instanceof Error ? error.message : String(error),
       message: "Database connection failed",
+      recommendation: "Check your DATABASE_URL environment variable and make sure your database is running",
     }
   }
 }
@@ -155,12 +177,14 @@ export async function getAllEvents() {
 
 export async function getEventById(id: string) {
   try {
+    console.log(`Getting event by ID: ${id}`)
     const result = await db`
       SELECT * FROM "Event" WHERE id = ${id}
     `
+    console.log(`Result for event ID ${id}:`, result)
     return result[0] || null
   } catch (error) {
-    console.error("Error getting event by id:", error)
+    console.error(`Error getting event by id ${id}:`, error)
     return null
   }
 }

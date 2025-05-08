@@ -1,36 +1,36 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-// CORS headers for API routes
+// CORS headers for API responses
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
-// Helper function to add CORS headers to a response
-export function addCorsHeaders(response: NextResponse): NextResponse {
+// Helper function to add CORS headers to any response
+export function addCorsHeaders(response: NextResponse) {
+  // Add CORS headers to the response
   Object.entries(corsHeaders).forEach(([key, value]) => {
     response.headers.set(key, value)
   })
+
   return response
 }
 
-// Helper function to handle CORS preflight requests
-export function handleCors(request: NextRequest): NextResponse | undefined {
+// Handle CORS preflight requests
+export function handleCors(request: NextRequest) {
+  // Handle preflight requests
   if (request.method === "OPTIONS") {
-    return new NextResponse(null, {
-      status: 200,
-      headers: corsHeaders,
-    })
+    return new NextResponse(null, { headers: corsHeaders })
   }
-  return undefined
+
+  return null
 }
 
-// Helper function to wrap a response with CORS headers
-export function withCors(response: NextResponse): NextResponse {
+export function withCors(res: NextResponse): NextResponse {
   Object.entries(corsHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value)
+    res.headers.set(key, value)
   })
-  return response
+  return res
 }

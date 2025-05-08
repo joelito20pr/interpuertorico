@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { addCorsHeaders, handleCors } from "@/lib/api-utils"
-import { generateSlug } from "@/lib/utils"
+import { addCorsHeaders } from "@/lib/api-utils"
 
 export async function GET(request: Request) {
-  // Handle CORS preflight
-  const corsResponse = handleCors(request as any)
-  if (corsResponse) return corsResponse
-
   try {
     // Check if Event table exists
     const tableCheck = await db`
@@ -18,51 +13,63 @@ export async function GET(request: Request) {
     `
 
     if (!tableCheck[0]?.exists) {
-      return addCorsHeaders(
-        NextResponse.json(
-          {
-            success: false,
-            error: "Event table does not exist",
-            recommendation: "Run /api/repair-database to create required tables",
-          },
-          { status: 404 },
-        ),
-      )
+      // Create Event table if it doesn't exist
+      await db`
+        CREATE TABLE IF NOT EXISTS "Event" (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          date TIMESTAMP NOT NULL,
+          location TEXT NOT NULL,
+          "requiresPayment" BOOLEAN DEFAULT false,
+          price TEXT,
+          "stripeLink" TEXT,
+          "shareableSlug" TEXT,
+          "maxAttendees" INTEGER,
+          "createdAt" TIMESTAMP DEFAULT NOW(),
+          "updatedAt" TIMESTAMP DEFAULT NOW()
+        )
+      `
     }
 
     // Create a sample event
-    const title = "Evento de Prueba"
-    const slug = await generateSlug(title)
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    const eventId = `event_${Date.now()}`
+    const eventTitle = "Evento de Prueba"
+    const eventDate = new Date()
+    eventDate.setDate(eventDate.getDate() + 7) // Set date to 7 days from now
 
-    const newEvent = await db`
+    const slug = `evento-de-prueba-${Math.floor(Math.random() * 10000)}`
+
+    const result = await db`
       INSERT INTO "Event" (
-        "title", 
-        "description", 
-        "date", 
-        "location", 
-        "maxParticipants", 
+        id, 
+        title, 
+        description, 
+        date, 
+        location, 
+        "requiresPayment", 
         "shareableSlug",
-        "createdAt",
+        "createdAt", 
         "updatedAt"
       ) VALUES (
-        ${title}, 
-        ${"Este es un evento de prueba creado automáticamente para diagnosticar problemas."}, 
-        ${tomorrow.toISOString()}, 
+        ${eventId}, 
+        ${eventTitle}, 
+        ${"Este es un evento de prueba creado para diagnóstico."}, 
+        ${eventDate}, 
         ${"San Juan, Puerto Rico"}, 
-        ${100}, 
+        ${false}, 
         ${slug},
-        ${new Date().toISOString()},
-        ${new Date().toISOString()}
-      ) RETURNING *
+        ${new Date()}, 
+        ${new Date()}
+      )
+      RETURNING *
     `
 
     return addCorsHeaders(
       NextResponse.json({
         success: true,
         message: "Sample event created successfully",
-        event: newEvent[0],
+        event: result[0],
       }),
     )
   } catch (error) {
