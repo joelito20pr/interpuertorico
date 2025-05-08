@@ -1,30 +1,55 @@
 import { NextResponse } from "next/server"
 import { db, testDatabaseConnection } from "@/lib/db"
+import { corsHeaders } from "@/lib/api-utils"
+
+// Add OPTIONS method for CORS
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
+    console.log(`Attempting to delete event with ID: ${id}`)
 
     // First test the database connection
     const connectionTest = await testDatabaseConnection()
     if (!connectionTest.success) {
+      console.error("Database connection failed:", connectionTest.error)
       return NextResponse.json(
         {
           success: false,
           error: "Database connection failed",
           details: connectionTest.error,
         },
-        { status: 500 },
+        { status: 500, headers: corsHeaders },
+      )
+    }
+
+    // Check if the event exists before deleting
+    const eventCheck = await db`SELECT id FROM "Event" WHERE id = ${id}`
+    if (!eventCheck || eventCheck.length === 0) {
+      console.error(`Event with ID ${id} not found`)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Event not found",
+        },
+        { status: 404, headers: corsHeaders },
       )
     }
 
     // Delete the event
     await db`DELETE FROM "Event" WHERE id = ${id}`
+    console.log(`Successfully deleted event with ID: ${id}`)
 
-    return NextResponse.json({
-      success: true,
-      message: "Event deleted successfully",
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Event deleted successfully",
+      },
+      { headers: corsHeaders },
+    )
   } catch (error) {
     console.error("Error deleting event:", error)
     return NextResponse.json(
@@ -33,7 +58,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         error: "Error deleting event",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: 500, headers: corsHeaders },
     )
   }
 }
@@ -41,17 +66,19 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
+    console.log(`Attempting to get event with ID: ${id}`)
 
     // First test the database connection
     const connectionTest = await testDatabaseConnection()
     if (!connectionTest.success) {
+      console.error("Database connection failed:", connectionTest.error)
       return NextResponse.json(
         {
           success: false,
           error: "Database connection failed",
           details: connectionTest.error,
         },
-        { status: 500 },
+        { status: 500, headers: corsHeaders },
       )
     }
 
@@ -61,19 +88,24 @@ export async function GET(request: Request, { params }: { params: { id: string }
     `
 
     if (!result || result.length === 0) {
+      console.error(`Event with ID ${id} not found`)
       return NextResponse.json(
         {
           success: false,
           error: "Event not found",
         },
-        { status: 404 },
+        { status: 404, headers: corsHeaders },
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result[0],
-    })
+    console.log(`Successfully retrieved event with ID: ${id}`)
+    return NextResponse.json(
+      {
+        success: true,
+        data: result[0],
+      },
+      { headers: corsHeaders },
+    )
   } catch (error) {
     console.error("Error getting event:", error)
     return NextResponse.json(
@@ -82,7 +114,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         error: "Error getting event",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: 500, headers: corsHeaders },
     )
   }
 }
@@ -90,17 +122,32 @@ export async function GET(request: Request, { params }: { params: { id: string }
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
+    console.log(`Attempting to update event with ID: ${id}`)
 
     // First test the database connection
     const connectionTest = await testDatabaseConnection()
     if (!connectionTest.success) {
+      console.error("Database connection failed:", connectionTest.error)
       return NextResponse.json(
         {
           success: false,
           error: "Database connection failed",
           details: connectionTest.error,
         },
-        { status: 500 },
+        { status: 500, headers: corsHeaders },
+      )
+    }
+
+    // Check if the event exists before updating
+    const eventCheck = await db`SELECT id FROM "Event" WHERE id = ${id}`
+    if (!eventCheck || eventCheck.length === 0) {
+      console.error(`Event with ID ${id} not found`)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Event not found",
+        },
+        { status: 404, headers: corsHeaders },
       )
     }
 
@@ -114,7 +161,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           success: false,
           error: "Missing required fields",
         },
-        { status: 400 },
+        { status: 400, headers: corsHeaders },
       )
     }
 
@@ -141,19 +188,24 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       `
 
       if (!result || result.length === 0) {
+        console.error(`Failed to update event with ID ${id}`)
         return NextResponse.json(
           {
             success: false,
-            error: "Event not found",
+            error: "Failed to update event",
           },
-          { status: 404 },
+          { status: 500, headers: corsHeaders },
         )
       }
 
-      return NextResponse.json({
-        success: true,
-        data: result[0],
-      })
+      console.log(`Successfully updated event with ID: ${id}`)
+      return NextResponse.json(
+        {
+          success: true,
+          data: result[0],
+        },
+        { headers: corsHeaders },
+      )
     } catch (dbError) {
       console.error("Database error updating event:", dbError)
       return NextResponse.json(
@@ -162,7 +214,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           error: "Database error updating event",
           details: dbError instanceof Error ? dbError.message : String(dbError),
         },
-        { status: 500 },
+        { status: 500, headers: corsHeaders },
       )
     }
   } catch (error) {
@@ -173,7 +225,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         error: "Error updating event",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: 500, headers: corsHeaders },
     )
   }
 }

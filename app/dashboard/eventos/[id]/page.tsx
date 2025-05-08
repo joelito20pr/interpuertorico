@@ -20,11 +20,19 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
   const [event, setEvent] = useState<any>(null)
   const [registrationCount, setRegistrationCount] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     async function loadEvent() {
       try {
+        console.log(`Loading event with ID: ${params.id}`)
         const response = await fetch(`/api/events/${params.id}`)
+
+        if (response.status === 404) {
+          setError("Evento no encontrado. Es posible que haya sido eliminado o que la URL sea incorrecta.")
+          setIsLoading(false)
+          return
+        }
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
@@ -36,12 +44,17 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
           setEvent(result.data)
 
           // Cargar conteo de registros
-          const regResponse = await fetch(`/api/events/${params.id}/registrations`)
-          if (regResponse.ok) {
-            const regResult = await regResponse.json()
-            if (regResult.success) {
-              setRegistrationCount(regResult.data.totalRegistrations)
+          try {
+            const regResponse = await fetch(`/api/events/${params.id}/registrations`)
+            if (regResponse.ok) {
+              const regResult = await regResponse.json()
+              if (regResult.success) {
+                setRegistrationCount(regResult.data.totalRegistrations)
+              }
             }
+          } catch (regError) {
+            console.error("Error loading registrations:", regError)
+            // Don't set an error for this, just log it
           }
         } else {
           setError(result.error || "Error al cargar el evento")
@@ -63,17 +76,25 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
     }
 
     try {
+      setIsDeleting(true)
+      console.log(`Deleting event with ID: ${params.id}`)
+
       const response = await fetch(`/api/events/${params.id}`, {
         method: "DELETE",
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(`HTTP error! status: ${response.status}. ${errorData.error || ""}`)
       }
 
       const result = await response.json()
 
       if (result.success) {
+        toast({
+          title: "Evento eliminado",
+          description: "El evento ha sido eliminado correctamente.",
+        })
         router.push("/dashboard/eventos")
       } else {
         setError(result.error || "Error al eliminar el evento")
@@ -81,6 +102,8 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
     } catch (error) {
       console.error("Error deleting event:", error)
       setError(`Error al eliminar el evento: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -119,6 +142,9 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+        <div className="flex justify-center mt-4">
+          <Button onClick={() => router.push("/dashboard/eventos")}>Ver todos los eventos</Button>
+        </div>
       </div>
     )
   }
@@ -135,6 +161,9 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
             <p className="text-center text-muted-foreground">No se encontró información del evento.</p>
           </CardContent>
         </Card>
+        <div className="flex justify-center mt-4">
+          <Button onClick={() => router.push("/dashboard/eventos")}>Ver todos los eventos</Button>
+        </div>
       </div>
     )
   }
@@ -166,14 +195,23 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
               Editar
             </Link>
           </Button>
-          <Button variant="destructive" onClick={handleDelete}>
-            <Trash className="h-4 w-4 mr-2" />
-            Eliminar
+          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+            {isDeleting ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <Trash className="h-4 w-4 mr-2" />
+                Eliminar
+              </>
+            )}
           </Button>
         </div>
       </div>
 
-      {event.isPublic && event.shareableSlug && (
+      {event.shareableSlug && (
         <Alert>
           <Share2 className="h-4 w-4" />
           <AlertTitle>Evento público</AlertTitle>
@@ -276,7 +314,7 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
                   <div className="flex items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <p className="text-sm font-medium">Evento público</p>
-                      <p className="text-sm text-muted-foreground">{event.isPublic ? "Sí" : "No"}</p>
+                      <p className="text-sm text-muted-foreground">{event.shareableSlug ? "Sí" : "No"}</p>
                     </div>
                   </div>
 
@@ -316,7 +354,7 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
                     ? "No hay registros para este evento."
                     : `${registrationCount} ${registrationCount === 1 ? "participante registrado" : "participantes registrados"}.`}
                 </p>
-                {registrationCount === 0 && event.isPublic && event.shareableSlug && (
+                {registrationCount === 0 && event.shareableSlug && (
                   <p className="mt-2">Comparte el enlace público para que las personas puedan registrarse.</p>
                 )}
               </div>
