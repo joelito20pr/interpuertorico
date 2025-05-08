@@ -20,12 +20,7 @@ export async function POST(request: Request) {
     const registrationData = await request.json()
 
     // Validate required fields
-    if (
-      !registrationData.eventId ||
-      !registrationData.name ||
-      !registrationData.guardianName ||
-      !registrationData.email
-    ) {
+    if (!registrationData.eventId || !registrationData.name || !registrationData.email) {
       return NextResponse.json(
         {
           success: false,
