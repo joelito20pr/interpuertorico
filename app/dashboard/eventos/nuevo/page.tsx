@@ -76,31 +76,53 @@ export default function NuevoEventoPage() {
         shareableSlug = formData.shareableSlug || generateSlug(formData.title)
       }
 
+      // Convertir maxAttendees a número si existe
+      let maxAttendees = null
+      if (formData.maxAttendees) {
+        const parsedValue = Number.parseInt(formData.maxAttendees, 10)
+        if (!isNaN(parsedValue)) {
+          maxAttendees = parsedValue
+        }
+      }
+
+      // Preparar los datos para enviar
+      const eventDataToSend = {
+        title: formData.title,
+        description: formData.description || "",
+        date: new Date(formData.date).toISOString(),
+        location: formData.location,
+        requiresPayment,
+        price: requiresPayment ? formData.price : null,
+        stripeLink: requiresPayment ? formData.stripeLink : null,
+        shareableSlug,
+        maxAttendees,
+      }
+
+      console.log("Sending event data:", eventDataToSend)
+
       // Use the API endpoint instead of server action
       const response = await fetch("/api/events", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
-          date: new Date(formData.date),
-          location: formData.location,
-          requiresPayment,
-          price: requiresPayment ? formData.price : null,
-          stripeLink: requiresPayment ? formData.stripeLink : null,
-          shareableSlug,
-          maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees) : null,
-        }),
+        body: JSON.stringify(eventDataToSend),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      console.log("Response status:", response.status)
+
+      let result
+      try {
+        result = await response.json()
+        console.log("Response data:", result)
+      } catch (jsonError) {
+        console.error("Error parsing JSON response:", jsonError)
+        throw new Error("Error al procesar la respuesta del servidor")
       }
 
-      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || `HTTP error! status: ${response.status}`)
+      }
 
       if (result.success) {
         toast({

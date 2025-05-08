@@ -118,38 +118,53 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       )
     }
 
-    // Update the event
-    const result = await db`
-      UPDATE "Event"
-      SET 
-        title = ${eventData.title},
-        description = ${eventData.description || null},
-        date = ${new Date(eventData.date)},
-        location = ${eventData.location},
-        "requiresPayment" = ${eventData.requiresPayment || false},
-        price = ${eventData.price || null},
-        "stripeLink" = ${eventData.stripeLink || null},
-        "shareableSlug" = ${eventData.shareableSlug || null},
-        "maxAttendees" = ${eventData.maxAttendees || null},
-        "updatedAt" = NOW()
-      WHERE id = ${id}
-      RETURNING *
-    `
+    // Log the data being sent to the database for debugging
+    console.log("Updating event with data:", JSON.stringify(eventData, null, 2))
 
-    if (!result || result.length === 0) {
+    // Update the event with better error handling
+    try {
+      const result = await db`
+        UPDATE "Event"
+        SET 
+          title = ${eventData.title},
+          description = ${eventData.description || null},
+          date = ${new Date(eventData.date)},
+          location = ${eventData.location},
+          "requiresPayment" = ${eventData.requiresPayment || false},
+          price = ${eventData.price || null},
+          "stripeLink" = ${eventData.stripeLink || null},
+          "shareableSlug" = ${eventData.shareableSlug || null},
+          "maxAttendees" = ${eventData.maxAttendees || null},
+          "updatedAt" = NOW()
+        WHERE id = ${id}
+        RETURNING *
+      `
+
+      if (!result || result.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Event not found",
+          },
+          { status: 404 },
+        )
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: result[0],
+      })
+    } catch (dbError) {
+      console.error("Database error updating event:", dbError)
       return NextResponse.json(
         {
           success: false,
-          error: "Event not found",
+          error: "Database error updating event",
+          details: dbError instanceof Error ? dbError.message : String(dbError),
         },
-        { status: 404 },
+        { status: 500 },
       )
     }
-
-    return NextResponse.json({
-      success: true,
-      data: result[0],
-    })
   } catch (error) {
     console.error("Error updating event:", error)
     return NextResponse.json(

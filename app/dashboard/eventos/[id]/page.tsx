@@ -136,9 +136,25 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
       }
 
       // Si es público y no tiene slug, generar uno
-      if (isPublic && !formData.shareableSlug) {
-        formData.shareableSlug = generateSlug(formData.title)
+      let shareableSlug = null
+      if (isPublic) {
+        shareableSlug = formData.shareableSlug || generateSlug(formData.title)
       }
+
+      // Preparar los datos para enviar
+      const eventDataToSend = {
+        title: formData.title,
+        description: formData.description,
+        date: new Date(formData.date).toISOString(),
+        location: formData.location,
+        requiresPayment,
+        price: requiresPayment ? formData.price : null,
+        stripeLink: requiresPayment ? formData.stripeLink : null,
+        shareableSlug,
+        maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees, 10) : null,
+      }
+
+      console.log("Sending data:", eventDataToSend)
 
       // Use the API endpoint instead of server action
       const response = await fetch(`/api/events/${params.id}`, {
@@ -146,25 +162,22 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
-          date: new Date(formData.date),
-          location: formData.location,
-          requiresPayment,
-          price: requiresPayment ? formData.price : null,
-          stripeLink: requiresPayment ? formData.stripeLink : null,
-          shareableSlug: isPublic ? formData.shareableSlug : null,
-          maxAttendees: formData.maxAttendees ? Number.parseInt(formData.maxAttendees) : null,
-        }),
+        body: JSON.stringify(eventDataToSend),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      const responseText = await response.text()
+      console.log("Response text:", responseText)
+
+      let result
+      try {
+        result = JSON.parse(responseText)
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${responseText}`)
       }
 
-      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`)
+      }
 
       if (result.success) {
         toast({
