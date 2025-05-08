@@ -47,7 +47,7 @@ export function TopNav({ userId }: TopNavProps) {
   }
 
   return (
-    <nav className="bg-white border-b border-gray-200">
+    <header className="bg-white shadow-sm z-10">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center md:hidden">
@@ -118,6 +118,12 @@ export function TopNav({ userId }: TopNavProps) {
               Dashboard
             </Link>
             <Link
+              href="/dashboard/patrocinadores"
+              className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+            >
+              Patrocinadores
+            </Link>
+            <Link
               href="/dashboard/eventos"
               className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
             >
@@ -165,6 +171,6 @@ export function TopNav({ userId }: TopNavProps) {
           </div>
         </div>
       )}
-    </nav>
+    </header>
   )
 }
