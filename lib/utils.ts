@@ -67,3 +67,25 @@ export function formatLocation(location: string): string {
   }
   return location
 }
+
+export function generateWhatsAppLink(phone: string, message: string): string {
+  // Formatear el número de teléfono (eliminar espacios, guiones, etc.)
+  let formattedPhone = phone.replace(/[\s-()]/g, "")
+
+  // Asegurarse de que el número tenga el formato internacional con +
+  if (!formattedPhone.startsWith("+")) {
+    // Si comienza con 1, añadir el +
+    if (formattedPhone.startsWith("1")) {
+      formattedPhone = "+" + formattedPhone
+    } else {
+      // Si no comienza con código de país, asumir que es de Puerto Rico (+1)
+      formattedPhone = "+1" + formattedPhone
+    }
+  }
+
+  // Codificar el mensaje para URL
+  const encodedMessage = encodeURIComponent(message)
+
+  // Generar el enlace
+  return `https://wa.me/${formattedPhone.replace("+", "")}?text=${encodedMessage}`
+}
