@@ -53,19 +53,30 @@ export async function GET() {
     if (checkEventRegistration.length === 0) {
       console.log("Creating EventRegistration table...")
       await db`
-        CREATE TABLE "EventRegistration" (
+        CREATE TABLE IF NOT EXISTS "EventRegistration" (
           id TEXT PRIMARY KEY,
-          "eventId" TEXT REFERENCES "Event"(id),
+          "eventId" TEXT NOT NULL REFERENCES "Event"(id) ON DELETE CASCADE,
           name TEXT NOT NULL,
+          "guardianName" TEXT,
           email TEXT NOT NULL,
           phone TEXT,
           "numberOfAttendees" INTEGER DEFAULT 1,
           "paymentStatus" TEXT DEFAULT 'PENDING',
           "paymentReference" TEXT,
-          "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `
+
+      // Add guardianName column if it doesn't exist
+      try {
+        await db`
+          ALTER TABLE "EventRegistration" 
+          ADD COLUMN IF NOT EXISTS "guardianName" TEXT
+        `
+      } catch (error) {
+        console.error("Error adding guardianName column:", error)
+      }
       console.log("EventRegistration table created successfully")
     } else {
       console.log("EventRegistration table already exists")

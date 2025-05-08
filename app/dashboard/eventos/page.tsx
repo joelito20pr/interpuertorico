@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Calendar, MapPin, Edit, LinkIcon, ExternalLink } from "lucide-react"
+import { PlusCircle, Calendar, MapPin, Edit, LinkIcon, ExternalLink, Users } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -83,12 +83,14 @@ export default function EventosPage() {
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-xl">{event.title}</CardTitle>
-                  {event.shareableSlug && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <LinkIcon className="h-3 w-3" />
-                      Público
-                    </Badge>
-                  )}
+                  <div className="flex gap-1">
+                    {event.shareableSlug && (
+                      <Badge variant="outline" className="flex items-center gap-1">
+                        <LinkIcon className="h-3 w-3" />
+                        Público
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pb-4">
@@ -130,7 +132,17 @@ export default function EventosPage() {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 flex justify-end">
+                <div className="mt-4 flex justify-end gap-2">
+                  {event.shareableSlug && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/eventos/${event.id}/registros`)}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Registros
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/eventos/${event.id}`)}>
                     <Edit className="h-4 w-4 mr-2" />
                     Editar

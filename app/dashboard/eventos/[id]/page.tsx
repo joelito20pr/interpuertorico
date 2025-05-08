@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Trash2, LinkIcon, Copy, ExternalLink } from "lucide-react"
+import { ArrowLeft, Trash2, LinkIcon, Copy, ExternalLink, Users } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { format } from "date-fns"
@@ -243,10 +243,18 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">Editar Evento</h1>
         </div>
-        <Button variant="destructive" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4 mr-2" />
-          Eliminar
-        </Button>
+        <div className="flex gap-2">
+          {isPublic && formData.shareableSlug && (
+            <Button variant="outline" onClick={() => router.push(`/dashboard/eventos/${params.id}/registros`)}>
+              <Users className="h-4 w-4 mr-2" />
+              Ver Registros
+            </Button>
+          )}
+          <Button variant="destructive" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Eliminar
+          </Button>
+        </div>
       </div>
 
       {error && (

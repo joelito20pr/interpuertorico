@@ -20,7 +20,12 @@ export async function POST(request: Request) {
     const registrationData = await request.json()
 
     // Validate required fields
-    if (!registrationData.eventId || !registrationData.name || !registrationData.email) {
+    if (
+      !registrationData.eventId ||
+      !registrationData.name ||
+      !registrationData.guardianName ||
+      !registrationData.email
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -80,11 +85,12 @@ export async function POST(request: Request) {
     const id = `reg_${Date.now()}`
     const result = await db`
       INSERT INTO "EventRegistration" (
-        id, "eventId", name, email, phone, "numberOfAttendees", "paymentStatus", "paymentReference", "createdAt", "updatedAt"
+        id, "eventId", name, "guardianName", email, phone, "numberOfAttendees", "paymentStatus", "paymentReference", "createdAt", "updatedAt"
       ) VALUES (
         ${id}, 
         ${registrationData.eventId}, 
         ${registrationData.name}, 
+        ${registrationData.guardianName},
         ${registrationData.email}, 
         ${registrationData.phone || null},
         ${registrationData.numberOfAttendees || 1},

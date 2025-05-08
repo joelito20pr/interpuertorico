@@ -26,6 +26,7 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
   const [success, setSuccess] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
+    guardianName: "",
     email: "",
     phone: "",
     numberOfAttendees: "1",
@@ -101,6 +102,7 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
         body: JSON.stringify({
           eventId: event.id,
           name: formData.name,
+          guardianName: formData.guardianName,
           email: formData.email,
           phone: formData.phone,
           numberOfAttendees: Number.parseInt(formData.numberOfAttendees),
@@ -325,13 +327,24 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nombre completo *</Label>
+                      <Label htmlFor="name">Nombre completo jugador *</Label>
                       <Input
                         id="name"
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
-                        placeholder="Tu nombre"
+                        placeholder="Nombre del jugador"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="guardianName">Nombre completo Encargado *</Label>
+                      <Input
+                        id="guardianName"
+                        name="guardianName"
+                        value={formData.guardianName || ""}
+                        onChange={handleInputChange}
+                        placeholder="Nombre del encargado o responsable"
                         required
                       />
                     </div>
@@ -358,7 +371,7 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="numberOfAttendees">Número de asistentes</Label>
+                      <Label htmlFor="numberOfAttendees">Cantidad de jugadores</Label>
                       <Input
                         id="numberOfAttendees"
                         name="numberOfAttendees"
