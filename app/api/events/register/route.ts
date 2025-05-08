@@ -3,17 +3,78 @@ import { db } from "@/lib/db"
 import { sendFreeNotification } from "@/lib/free-notification-service"
 import { handleCors, withCors } from "@/lib/api-utils"
 
+// Helper function to validate email format
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+// Helper function to check if a table exists
+async function tableExists(tableName: string): Promise<boolean> {
+  try {
+    const result = await db`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public'
+        AND table_name = ${tableName}
+      ) as exists
+    `
+    return result[0]?.exists || false
+  } catch (error) {
+    console.error(`Error checking if table ${tableName} exists:`, error)
+    return false
+  }
+}
+
+// Helper function to check if a column exists in a table
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  try {
+    const result = await db`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = ${tableName}
+        AND column_name = ${columnName}
+      ) as exists
+    `
+    return result[0]?.exists || false
+  } catch (error) {
+    console.error(`Error checking if column ${columnName} exists in table ${tableName}:`, error)
+    return false
+  }
+}
+
 export async function POST(request: NextRequest) {
+  console.log("Registration endpoint called")
+
   // Handle CORS preflight requests
   const corsResponse = handleCors(request)
-  if (corsResponse) return corsResponse
+  if (corsResponse) {
+    console.log("Handling CORS preflight request")
+    return corsResponse
+  }
 
   try {
     console.log("Processing registration request")
-    const data = await request.json()
 
-    // Log registration attempt
-    console.log("Registration data:", JSON.stringify(data))
+    // Parse request body
+    let data
+    try {
+      data = await request.json()
+      console.log("Registration data received:", JSON.stringify(data))
+    } catch (error) {
+      console.error("Error parsing request body:", error)
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error al procesar la solicitud: formato JSON inválido",
+            error: error instanceof Error ? error.message : String(error),
+          },
+          { status: 400 },
+        ),
+      )
+    }
 
     // Validate required fields
     if (!data.eventId || !data.name || !data.email) {
@@ -27,6 +88,13 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             message: "Se requieren los campos: ID del evento, nombre y correo electrónico",
+            debug: {
+              receivedData: {
+                eventId: data.eventId || null,
+                name: data.name || null,
+                email: data.email || null,
+              },
+            },
           },
           { status: 400 },
         ),
@@ -34,8 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(data.email)) {
+    if (!isValidEmail(data.email)) {
       console.error("Invalid email format:", data.email)
       return withCors(
         NextResponse.json(
@@ -48,7 +115,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if Event table exists
+    const eventTableExists = await tableExists("Event")
+    if (!eventTableExists) {
+      console.error("Event table does not exist")
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error en la base de datos: la tabla de eventos no existe",
+            debug: {
+              missingTable: "Event",
+              recommendation: "Visit /api/repair-database to create missing tables",
+            },
+          },
+          { status: 500 },
+        ),
+      )
+    }
+
+    // Check if EventRegistration table exists
+    const registrationTableExists = await tableExists("EventRegistration")
+    if (!registrationTableExists) {
+      console.error("EventRegistration table does not exist")
+      return withCors(
+        NextResponse.json(
+          {
+            success: false,
+            message: "Error en la base de datos: la tabla de registros no existe",
+            debug: {
+              missingTable: "EventRegistration",
+              recommendation: "Visit /api/repair-database to create missing tables",
+            },
+          },
+          { status: 500 },
+        ),
+      )
+    }
+
     // Check if event exists and is open for registration
+    console.log("Checking if event exists:", data.eventId)
     const event = await db`
       SELECT id, title, date, location, "maxAttendees", "isPublic", "shareableSlug"
       FROM "Event"
@@ -62,6 +168,9 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             message: "Evento no encontrado",
+            debug: {
+              requestedEventId: data.eventId,
+            },
           },
           { status: 404 },
         ),
@@ -69,6 +178,7 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedEvent = event[0]
+    console.log("Event found:", selectedEvent)
 
     // Check if event is public
     if (!selectedEvent.isPublic) {
@@ -78,6 +188,10 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             message: "Este evento no está abierto para registro público",
+            debug: {
+              eventId: data.eventId,
+              isPublic: selectedEvent.isPublic,
+            },
           },
           { status: 403 },
         ),
@@ -103,6 +217,11 @@ export async function POST(request: NextRequest) {
             {
               success: false,
               message: "El evento ha alcanzado el número máximo de participantes",
+              debug: {
+                eventId: data.eventId,
+                maxAttendees: selectedEvent.maxAttendees,
+                currentCount: currentAttendees[0].count,
+              },
             },
             { status: 409 },
           ),
@@ -128,6 +247,11 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             message: "Este correo electrónico ya está registrado para este evento",
+            debug: {
+              eventId: data.eventId,
+              email: data.email,
+              registrationId: existingRegistration[0].id,
+            },
           },
           { status: 409 },
         ),
@@ -138,24 +262,17 @@ export async function POST(request: NextRequest) {
     const registrationId = `reg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
     // Check if the table has guardianName column before attempting to insert
-    const hasGuardianNameColumn = await db`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      AND table_name = 'EventRegistration'
-      AND column_name = 'guardianName'
-    `.catch((e) => {
-      console.error("Error checking guardianName column:", e)
-      return []
-    })
+    const hasGuardianNameColumn = await columnExists("EventRegistration", "guardianName")
+    console.log("Has guardianName column:", hasGuardianNameColumn)
 
     // Insert registration data with conditional handling of guardianName
     try {
-      if (hasGuardianNameColumn.length > 0) {
+      if (hasGuardianNameColumn) {
         // If guardianName column exists
+        console.log("Inserting registration with guardianName")
         await db`
           INSERT INTO "EventRegistration" (
-            id, "eventId", name, email, phone, "guardianName", "registrationDate", status
+            id, "eventId", name, email, phone, "guardianName", "registrationDate", status, "numberOfAttendees"
           ) VALUES (
             ${registrationId},
             ${data.eventId},
@@ -164,14 +281,16 @@ export async function POST(request: NextRequest) {
             ${data.phone || null},
             ${data.guardianName || null},
             NOW(),
-            'REGISTERED'
+            'REGISTERED',
+            ${data.numberOfAttendees || 1}
           )
         `
       } else {
         // If guardianName column doesn't exist
+        console.log("Inserting registration without guardianName")
         await db`
           INSERT INTO "EventRegistration" (
-            id, "eventId", name, email, phone, "registrationDate", status
+            id, "eventId", name, email, phone, "registrationDate", status, "numberOfAttendees"
           ) VALUES (
             ${registrationId},
             ${data.eventId},
@@ -179,7 +298,8 @@ export async function POST(request: NextRequest) {
             ${data.email},
             ${data.phone || null},
             NOW(),
-            'REGISTERED'
+            'REGISTERED',
+            ${data.numberOfAttendees || 1}
           )
         `
       }
@@ -192,6 +312,11 @@ export async function POST(request: NextRequest) {
             success: false,
             message: "Error al guardar el registro",
             error: error instanceof Error ? error.message : String(error),
+            debug: {
+              registrationId,
+              eventId: data.eventId,
+              hasGuardianNameColumn,
+            },
           },
           { status: 500 },
         ),
@@ -201,6 +326,7 @@ export async function POST(request: NextRequest) {
     // Send confirmation notification
     let notificationResult
     try {
+      console.log("Sending confirmation notification")
       notificationResult = await sendFreeNotification(
         "registration",
         {
@@ -225,6 +351,7 @@ export async function POST(request: NextRequest) {
     }
 
     // At the end, wrap the response with CORS headers
+    console.log("Returning success response")
     return withCors(
       NextResponse.json({
         success: true,
@@ -251,5 +378,6 @@ export async function POST(request: NextRequest) {
 
 // Add OPTIONS method handler for CORS preflight
 export async function OPTIONS(request: NextRequest) {
+  console.log("OPTIONS request received for registration endpoint")
   return handleCors(request) || new NextResponse(null, { status: 200 })
 }
