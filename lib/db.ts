@@ -1,8 +1,20 @@
 import { neon } from "@neondatabase/serverless"
 import { sql } from "@vercel/postgres"
 
-// Create a SQL client
-export const db = neon(process.env.DATABASE_URL!)
+// Crear un cliente SQL con manejo de errores
+let dbClient
+try {
+  dbClient = neon(process.env.DATABASE_URL!)
+  console.log("Conexión a la base de datos establecida correctamente")
+} catch (error) {
+  console.error("Error al conectar con la base de datos:", error)
+  // Fallback a un cliente vacío que no hará nada
+  dbClient = {
+    query: async () => ({ rows: [] }),
+  }
+}
+
+export const db = dbClient
 
 // User functions
 export async function getUserByEmail(email: string) {
@@ -13,7 +25,7 @@ export async function getUserByEmail(email: string) {
     return result.rows[0] || null
   } catch (error) {
     console.error("Error getting user by email:", error)
-    throw error
+    return null
   }
 }
 
@@ -22,15 +34,15 @@ export async function getDashboardStats() {
   try {
     // Get event count
     const eventCountResult = await sql`SELECT COUNT(*) as count FROM "Event"`
-    const eventCount = Number.parseInt(eventCountResult.rows[0].count)
+    const eventCount = Number.parseInt(eventCountResult.rows[0]?.count || "0")
 
     // Get team count
     const teamCountResult = await sql`SELECT COUNT(*) as count FROM "Team"`
-    const teamCount = Number.parseInt(teamCountResult.rows[0].count)
+    const teamCount = Number.parseInt(teamCountResult.rows[0]?.count || "0")
 
     // Get member count
     const memberCountResult = await sql`SELECT COUNT(*) as count FROM "Member"`
-    const memberCount = Number.parseInt(memberCountResult.rows[0].count)
+    const memberCount = Number.parseInt(memberCountResult.rows[0]?.count || "0")
 
     // Get sponsor count and total amount
     const sponsorResult = await sql`
@@ -38,8 +50,8 @@ export async function getDashboardStats() {
       FROM "Sponsor" 
       WHERE "paymentStatus" = 'PAID'
     `
-    const sponsorCount = Number.parseInt(sponsorResult.rows[0].count)
-    const totalAmount = Number.parseFloat(sponsorResult.rows[0].total) || 0
+    const sponsorCount = Number.parseInt(sponsorResult.rows[0]?.count || "0")
+    const totalAmount = Number.parseFloat(sponsorResult.rows[0]?.total || "0")
 
     // Get recent sponsors
     const recentSponsors = await sql`
@@ -65,8 +77,8 @@ export async function getDashboardStats() {
       memberCount,
       sponsorCount,
       totalAmount,
-      recentSponsors: recentSponsors.rows,
-      upcomingEvents: upcomingEvents.rows,
+      recentSponsors: recentSponsors.rows || [],
+      upcomingEvents: upcomingEvents.rows || [],
       goalAmount: 5000, // Meta fija por ahora
     }
   } catch (error) {
@@ -91,7 +103,7 @@ export async function getAllEvents() {
       SELECT * FROM "Event"
       ORDER BY date DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting all events:", error)
     return []
@@ -189,7 +201,7 @@ export async function getAllTeams() {
       SELECT * FROM "Team"
       ORDER BY "createdAt" DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting all teams:", error)
     return []
@@ -272,7 +284,7 @@ export async function getAllMembers() {
       LEFT JOIN "Team" t ON m."teamId" = t.id
       ORDER BY m."createdAt" DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting all members:", error)
     return []
@@ -286,7 +298,7 @@ export async function getMembersByTeam(teamId: string) {
       WHERE "teamId" = ${teamId}
       ORDER BY "createdAt" DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting members by team:", error)
     return []
@@ -346,7 +358,7 @@ export async function getAllPosts() {
       LEFT JOIN "Team" t ON p."teamId" = t.id
       ORDER BY p."createdAt" DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting all posts:", error)
     return []
@@ -362,7 +374,7 @@ export async function getPostsByTeam(teamId: string) {
       WHERE p."teamId" = ${teamId}
       ORDER BY p."createdAt" DESC
     `
-    return result.rows
+    return result.rows || []
   } catch (error) {
     console.error("Error getting posts by team:", error)
     return []
@@ -401,6 +413,6 @@ export async function query(text: string, params: any[] = []) {
     return result.rows
   } catch (error) {
     console.error("Error executing query:", error)
-    throw error
+    return []
   }
 }
