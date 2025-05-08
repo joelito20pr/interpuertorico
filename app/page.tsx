@@ -253,8 +253,7 @@ export default function Home() {
             </div>
           </div>
           <p>© 2025 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
-          <p className="mt-2 text-sm text-gray-400">
-          </p>
+          <p className="mt-2 text-sm text-gray-400"></p>
         </div>
       </footer>
 
