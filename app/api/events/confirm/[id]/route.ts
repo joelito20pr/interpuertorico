@@ -8,30 +8,36 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const email = searchParams.get("email")
     const confirm = searchParams.get("confirm")
 
+    console.log("Confirmación recibida:", { eventId, email, confirm })
+
     // Validar parámetros
     if (!email || !confirm) {
       return new Response("Faltan parámetros requeridos", { status: 400 })
     }
 
     // Verificar si el registro existe
-    const registration = await db`
+    const registrations = await db`
       SELECT id, "paymentStatus" FROM "EventRegistration"
       WHERE "eventId" = ${eventId} AND email = ${email}
-      LIMIT 1
     `
 
-    if (!registration || registration.length === 0) {
+    console.log("Registros encontrados:", registrations)
+
+    if (!registrations || registrations.length === 0) {
       return new Response("Registro no encontrado", { status: 404 })
     }
 
     // Actualizar el estado de confirmación
     const confirmationStatus = confirm === "yes" ? "CONFIRMED" : "DECLINED"
 
-    await db`
+    const updateResult = await db`
       UPDATE "EventRegistration"
       SET "paymentStatus" = ${confirmationStatus}, "updatedAt" = NOW()
-      WHERE id = ${registration[0].id}
+      WHERE id = ${registrations[0].id}
+      RETURNING id, "paymentStatus"
     `
+
+    console.log("Resultado de actualización:", updateResult)
 
     // Redirigir a una página de confirmación
     const confirmationMessage =

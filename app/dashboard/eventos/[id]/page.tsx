@@ -14,13 +14,12 @@ import { useToast } from "@/components/ui/use-toast"
 
 export default function EventoDetallePage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [event, setEvent] = useState<any>(null)
   const [registrationCount, setRegistrationCount] = useState(0)
   const [copied, setCopied] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
     async function loadEvent() {
@@ -87,60 +86,16 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
 
   const copyShareableLink = () => {
     if (event?.shareableSlug) {
-      const url = `${window.location.origin}/eventos/${event.shareableSlug}`
+      // Usar el dominio correcto para el enlace compartible
+      const url = `https://www.interprfc.com/eventos/${event.shareableSlug}`
       navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    }
-  }
 
-  // Función para guardar los cambios del evento
-  const handleSubmit = async (formData: FormData) => {
-    setIsSubmitting(true)
-    setError("")
-
-    try {
-      // Construir el objeto de datos del evento
-      const eventData = {
-        title: formData.get("title") as string,
-        description: formData.get("description") as string,
-        date: new Date(formData.get("date") as string),
-        location: formData.get("location") as string,
-        requiresPayment: formData.get("requiresPayment") === "on",
-        price: formData.get("price") as string,
-        stripeLink: formData.get("stripeLink") as string,
-        isPublic: formData.get("isPublic") === "on",
-        shareableSlug: formData.get("shareableSlug") as string,
-        maxAttendees: formData.get("maxAttendees") ? Number.parseInt(formData.get("maxAttendees") as string) : null,
-      }
-
-      // Enviar la solicitud PUT a la API
-      const response = await fetch(`/api/events/${params.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(eventData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Error al actualizar el evento")
-      }
-
-      // Mostrar mensaje de éxito
       toast({
-        title: "Evento actualizado",
-        description: "El evento ha sido actualizado correctamente.",
+        title: "Enlace copiado",
+        description: "El enlace ha sido copiado al portapapeles.",
       })
-
-      // Redirigir a la lista de eventos
-      router.push("/dashboard/eventos")
-    } catch (error) {
-      console.error("Error updating event:", error)
-      setError(error instanceof Error ? error.message : "Error desconocido")
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -191,6 +146,9 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
     hour12: true,
   })
 
+  // URL pública del evento
+  const publicEventUrl = event.shareableSlug ? `https://www.interprfc.com/eventos/${event.shareableSlug}` : null
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -223,10 +181,17 @@ export default function EventoDetallePage({ params }: { params: { id: string } }
             <p>Este evento está disponible para registro público. Comparte el siguiente enlace:</p>
             <div className="flex items-center space-x-2">
               <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm">
-                {`${window.location.origin}/eventos/${event.shareableSlug}`}
+                {publicEventUrl}
               </code>
               <Button variant="outline" size="sm" className="h-8 px-2" onClick={copyShareableLink}>
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="mt-2">
+              <Button variant="outline" size="sm" asChild>
+                <a href={publicEventUrl} target="_blank" rel="noopener noreferrer">
+                  Ver página pública
+                </a>
               </Button>
             </div>
           </AlertDescription>

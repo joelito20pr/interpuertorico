@@ -99,7 +99,7 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
       "Email",
       "Teléfono",
       "Cantidad",
-      "Estado de Pago",
+      "Estado de Asistencia",
       "Fecha de Registro",
     ]
     const csvContent = [
@@ -129,6 +129,19 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  }
+
+  // Función para obtener el color y texto según el estado
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case "CONFIRMED":
+        return { color: "bg-green-100 text-green-800", text: "Confirmado" }
+      case "DECLINED":
+        return { color: "bg-red-100 text-red-800", text: "No asistirá" }
+      case "PENDING":
+      default:
+        return { color: "bg-yellow-100 text-yellow-800", text: "Pendiente" }
+    }
   }
 
   if (isLoading) {
@@ -245,27 +258,26 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRegistrations.map((registration) => (
-                    <TableRow key={registration.id}>
-                      <TableCell className="font-medium">{registration.name}</TableCell>
-                      <TableCell>{registration.guardianName || "-"}</TableCell>
-                      <TableCell>{registration.email}</TableCell>
-                      <TableCell>{registration.phone || "-"}</TableCell>
-                      <TableCell className="text-center">{registration.numberOfAttendees}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            registration.paymentStatus === "CONFIRMED"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {registration.paymentStatus === "CONFIRMED" ? "Confirmado" : "Pendiente"}
-                        </span>
-                      </TableCell>
-                      <TableCell>{formatDate(registration.createdAt)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredRegistrations.map((registration) => {
+                    const statusInfo = getStatusInfo(registration.paymentStatus)
+                    return (
+                      <TableRow key={registration.id}>
+                        <TableCell className="font-medium">{registration.name}</TableCell>
+                        <TableCell>{registration.guardianName || "-"}</TableCell>
+                        <TableCell>{registration.email}</TableCell>
+                        <TableCell>{registration.phone || "-"}</TableCell>
+                        <TableCell className="text-center">{registration.numberOfAttendees}</TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}
+                          >
+                            {statusInfo.text}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatDate(registration.createdAt)}</TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
