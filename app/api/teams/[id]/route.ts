@@ -1,43 +1,6 @@
 import { NextResponse } from "next/server"
 import { db, testDatabaseConnection } from "@/lib/db"
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const id = params.id
-
-    // First test the database connection
-    const connectionTest = await testDatabaseConnection()
-    if (!connectionTest.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database connection failed",
-          details: connectionTest.error,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Delete the event
-    await db`DELETE FROM "Event" WHERE id = ${id}`
-
-    return NextResponse.json({
-      success: true,
-      message: "Event deleted successfully",
-    })
-  } catch (error) {
-    console.error("Error deleting event:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Error deleting event",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
-  }
-}
-
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
@@ -55,16 +18,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
       )
     }
 
-    // Get the event
+    // Get the team
     const result = await db`
-      SELECT * FROM "Event" WHERE id = ${id}
+      SELECT * FROM "Team" WHERE id = ${id}
     `
 
     if (!result || result.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Event not found",
+          error: "Team not found",
         },
         { status: 404 },
       )
@@ -75,11 +38,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       data: result[0],
     })
   } catch (error) {
-    console.error("Error getting event:", error)
+    console.error("Error getting team:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Error getting event",
+        error: "Error getting team",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
@@ -105,10 +68,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
 
     // Parse the request body
-    const eventData = await request.json()
+    const teamData = await request.json()
 
     // Validate required fields
-    if (!eventData.title || !eventData.date || !eventData.location) {
+    if (!teamData.name || !teamData.category) {
       return NextResponse.json(
         {
           success: false,
@@ -118,17 +81,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       )
     }
 
-    // Update the event
+    // Update the team
     const result = await db`
-      UPDATE "Event"
+      UPDATE "Team"
       SET 
-        title = ${eventData.title},
-        description = ${eventData.description || null},
-        date = ${new Date(eventData.date)},
-        location = ${eventData.location},
-        "requiresPayment" = ${eventData.requiresPayment || false},
-        price = ${eventData.price || null},
-        "stripeLink" = ${eventData.stripeLink || null},
+        name = ${teamData.name},
+        category = ${teamData.category},
+        description = ${teamData.description || null},
         "updatedAt" = NOW()
       WHERE id = ${id}
       RETURNING *
@@ -138,7 +97,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json(
         {
           success: false,
-          error: "Event not found",
+          error: "Team not found",
         },
         { status: 404 },
       )
@@ -149,11 +108,48 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       data: result[0],
     })
   } catch (error) {
-    console.error("Error updating event:", error)
+    console.error("Error updating team:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Error updating event",
+        error: "Error updating team",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const id = params.id
+
+    // First test the database connection
+    const connectionTest = await testDatabaseConnection()
+    if (!connectionTest.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database connection failed",
+          details: connectionTest.error,
+        },
+        { status: 500 },
+      )
+    }
+
+    // Delete the team
+    await db`DELETE FROM "Team" WHERE id = ${id}`
+
+    return NextResponse.json({
+      success: true,
+      message: "Team deleted successfully",
+    })
+  } catch (error) {
+    console.error("Error deleting team:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error deleting team",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { getEventById, updateEvent, deleteEvent } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft, Trash2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 
 export default function EditarEventoPage({ params }: { params: { id: string } }) {
@@ -21,6 +22,7 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [requiresPayment, setRequiresPayment] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -33,7 +35,13 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
   useEffect(() => {
     async function loadEvent() {
       try {
-        const result = await getEventById(params.id)
+        const response = await fetch(`/api/events/${params.id}`)
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
 
         if (result.success && result.data) {
           const event = result.data
@@ -63,7 +71,7 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         console.error("Error loading event:", error)
         toast({
           title: "Error",
-          description: "Ocurrió un error al cargar el evento",
+          description: `Error al cargar el evento: ${error instanceof Error ? error.message : String(error)}`,
           variant: "destructive",
         })
         router.push("/dashboard/eventos")
@@ -86,39 +94,46 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError(null)
 
     try {
       // Validación básica
       if (!formData.title || !formData.date || !formData.location) {
-        toast({
-          title: "Error",
-          description: "Por favor complete todos los campos requeridos",
-          variant: "destructive",
-        })
+        setError("Por favor complete todos los campos requeridos")
         setIsSubmitting(false)
         return
       }
 
       // Si requiere pago, validar precio y enlace de Stripe
       if (requiresPayment && (!formData.price || !formData.stripeLink)) {
-        toast({
-          title: "Error",
-          description: "Si el evento requiere pago, debe especificar el precio y el enlace de pago",
-          variant: "destructive",
-        })
+        setError("Si el evento requiere pago, debe especificar el precio y el enlace de pago")
         setIsSubmitting(false)
         return
       }
 
-      const result = await updateEvent(params.id, {
-        title: formData.title,
-        description: formData.description,
-        date: new Date(formData.date),
-        location: formData.location,
-        requiresPayment,
-        price: requiresPayment ? formData.price : null,
-        stripeLink: requiresPayment ? formData.stripeLink : null,
+      // Use the API endpoint instead of server action
+      const response = await fetch(`/api/events/${params.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          date: new Date(formData.date),
+          location: formData.location,
+          requiresPayment,
+          price: requiresPayment ? formData.price : null,
+          stripeLink: requiresPayment ? formData.stripeLink : null,
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
 
       if (result.success) {
         toast({
@@ -127,15 +142,11 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         })
         router.push("/dashboard/eventos")
       } else {
-        throw new Error(result.error || "Error al actualizar el evento")
+        throw new Error(result.error || "Error al actualizar el evento. Por favor intente nuevamente.")
       }
     } catch (error) {
       console.error("Error updating event:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al actualizar el evento. Por favor intente nuevamente.",
-        variant: "destructive",
-      })
+      setError(`Error al actualizar el evento: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -144,7 +155,15 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
   const handleDelete = async () => {
     if (confirm("¿Está seguro que desea eliminar este evento? Esta acción no se puede deshacer.")) {
       try {
-        const result = await deleteEvent(params.id)
+        const response = await fetch(`/api/events/${params.id}`, {
+          method: "DELETE",
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
 
         if (result.success) {
           toast({
@@ -157,11 +176,7 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
         }
       } catch (error) {
         console.error("Error deleting event:", error)
-        toast({
-          title: "Error",
-          description: "Ocurrió un error al eliminar el evento",
-          variant: "destructive",
-        })
+        setError(`Error al eliminar el evento: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
   }
@@ -189,6 +204,14 @@ export default function EditarEventoPage({ params }: { params: { id: string } })
           Eliminar
         </Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

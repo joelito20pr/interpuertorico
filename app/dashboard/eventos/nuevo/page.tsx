@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { createEvent } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -59,15 +58,29 @@ export default function NuevoEventoPage() {
         return
       }
 
-      const result = await createEvent({
-        title: formData.title,
-        description: formData.description,
-        date: new Date(formData.date),
-        location: formData.location,
-        requiresPayment,
-        price: requiresPayment ? formData.price : null,
-        stripeLink: requiresPayment ? formData.stripeLink : null,
+      // Use the API endpoint instead of server action
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          date: new Date(formData.date),
+          location: formData.location,
+          requiresPayment,
+          price: requiresPayment ? formData.price : null,
+          stripeLink: requiresPayment ? formData.stripeLink : null,
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
 
       if (result.success) {
         toast({
@@ -76,12 +89,11 @@ export default function NuevoEventoPage() {
         })
         router.push("/dashboard/eventos")
       } else {
-        setError(result.error || "Error al crear el evento. Por favor intente nuevamente.")
-        console.error("Detalles del error:", result.details)
+        throw new Error(result.error || "Error al crear el evento. Por favor intente nuevamente.")
       }
     } catch (error) {
       console.error("Error creating event:", error)
-      setError("Ocurrió un error al crear el evento. Por favor intente nuevamente.")
+      setError(`Error al crear el evento: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSubmitting(false)
     }

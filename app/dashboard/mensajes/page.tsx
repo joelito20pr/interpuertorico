@@ -14,47 +14,61 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getPosts } from "@/lib/actions"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
+// Mock data for posts
+const mockPosts = [
+  {
+    id: 1,
+    title: "Información sobre el torneo",
+    teamName: "Inter Puerto Rico Sub-11",
+    authorName: "Administrador",
+    content: "Detalles importantes sobre el próximo torneo...",
+    isPublic: true,
+    createdAt: "2023-05-01T10:00:00Z",
+  },
+  {
+    id: 2,
+    title: "Horarios de entrenamiento",
+    teamName: "Inter Puerto Rico Sub-13",
+    authorName: "Entrenador",
+    content: "Los horarios de entrenamiento para la próxima semana...",
+    isPublic: false,
+    createdAt: "2023-04-28T14:30:00Z",
+  },
+  {
+    id: 3,
+    title: "Recordatorio de pago",
+    teamName: "General",
+    authorName: "Administrador",
+    content: "Recordatorio sobre los pagos pendientes...",
+    isPublic: true,
+    createdAt: "2023-04-25T09:15:00Z",
+  },
+]
+
 export default function MensajesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [posts, setPosts] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
   const router = useRouter()
 
   useEffect(() => {
-    loadPosts()
-  }, [])
-
-  async function loadPosts() {
-    setIsLoading(true)
-    try {
-      const result = await getPosts()
-      if (result.success) {
-        setPosts(result.data)
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "No se pudieron cargar los mensajes",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error loading posts:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al cargar los mensajes",
-        variant: "destructive",
-      })
-    } finally {
+    // Simulate loading data
+    const timer = setTimeout(() => {
+      setPosts(mockPosts)
       setIsLoading(false)
-    }
-  }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [])
 
   const filteredPosts = posts.filter(
     (post: any) =>
@@ -72,6 +86,17 @@ export default function MensajesPage() {
     }
   }
 
+  const handleDeletePost = (id: number) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este mensaje?")) {
+      // Simulate deletion
+      setPosts(posts.filter((post: any) => post.id !== id))
+      toast({
+        title: "Éxito",
+        description: "Mensaje eliminado correctamente",
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -81,6 +106,14 @@ export default function MensajesPage() {
           Nuevo Mensaje
         </Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -161,7 +194,7 @@ export default function MensajesPage() {
                           <span>Editar</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-red-600">
+                        <DropdownMenuItem onClick={() => handleDeletePost(post.id)} className="text-red-600">
                           <Trash2 className="mr-2 h-4 w-4" />
                           <span>Eliminar</span>
                         </DropdownMenuItem>

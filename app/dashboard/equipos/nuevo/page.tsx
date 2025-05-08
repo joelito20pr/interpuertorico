@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { createTeam } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -47,11 +46,25 @@ export default function NuevoEquipoPage() {
         return
       }
 
-      const result = await createTeam({
-        name: formData.name,
-        category: formData.category,
-        description: formData.description || null,
+      // Use the API endpoint instead of server action
+      const response = await fetch("/api/teams", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          category: formData.category,
+          description: formData.description || null,
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
 
       if (result.success) {
         toast({
@@ -60,12 +73,11 @@ export default function NuevoEquipoPage() {
         })
         router.push("/dashboard/equipos")
       } else {
-        setError(result.error || "Error al crear el equipo. Por favor intente nuevamente.")
-        console.error("Detalles del error:", result.details)
+        throw new Error(result.error || "Error al crear el equipo. Por favor intente nuevamente.")
       }
     } catch (error) {
       console.error("Error creating team:", error)
-      setError("Ocurrió un error al crear el equipo. Por favor intente nuevamente.")
+      setError(`Error al crear el equipo: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSubmitting(false)
     }
