@@ -60,3 +60,10 @@ export function isValidUrl(string: string): boolean {
     return false
   }
 }
+
+export function formatLocation(location: string): string {
+  if (isValidUrl(location)) {
+    return `<a href="${location}" target="_blank" rel="noopener noreferrer">${location}</a>`
+  }
+  return location
+}
