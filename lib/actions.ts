@@ -247,3 +247,13 @@ export async function createPost(data: {
     return { success: false, error: "Error al crear el mensaje" }
   }
 }
+
+export async function getEventById(id: string) {
+  try {
+    const event = await db.getEventById(id)
+    return { success: true, data: event }
+  } catch (error) {
+    console.error("Error al obtener evento:", error)
+    return { success: false, error: "Error al cargar el evento" }
+  }
+}

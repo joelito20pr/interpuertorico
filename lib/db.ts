@@ -34,7 +34,7 @@ export async function getDashboardStats() {
 
     // Get sponsor count and total amount
     const sponsorResult = await sql`
-      SELECT COUNT(*) as count, COALESCE(SUM(amount::numeric), 0) as total 
+      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total 
       FROM "Sponsor" 
       WHERE "paymentStatus" = 'PAID'
     `
@@ -71,7 +71,16 @@ export async function getDashboardStats() {
     }
   } catch (error) {
     console.error("Error getting dashboard stats:", error)
-    throw error
+    return {
+      eventCount: 0,
+      teamCount: 0,
+      memberCount: 0,
+      sponsorCount: 0,
+      totalAmount: 0,
+      recentSponsors: [],
+      upcomingEvents: [],
+      goalAmount: 5000,
+    }
   }
 }
 
@@ -85,7 +94,7 @@ export async function getAllEvents() {
     return result.rows
   } catch (error) {
     console.error("Error getting all events:", error)
-    throw error
+    return []
   }
 }
 
@@ -97,7 +106,7 @@ export async function getEventById(id: string) {
     return result.rows[0] || null
   } catch (error) {
     console.error("Error getting event by id:", error)
-    throw error
+    return null
   }
 }
 
@@ -183,7 +192,7 @@ export async function getAllTeams() {
     return result.rows
   } catch (error) {
     console.error("Error getting all teams:", error)
-    throw error
+    return []
   }
 }
 
@@ -195,7 +204,7 @@ export async function getTeamById(id: string) {
     return result.rows[0] || null
   } catch (error) {
     console.error("Error getting team by id:", error)
-    throw error
+    return null
   }
 }
 
@@ -266,7 +275,7 @@ export async function getAllMembers() {
     return result.rows
   } catch (error) {
     console.error("Error getting all members:", error)
-    throw error
+    return []
   }
 }
 
@@ -280,7 +289,7 @@ export async function getMembersByTeam(teamId: string) {
     return result.rows
   } catch (error) {
     console.error("Error getting members by team:", error)
-    throw error
+    return []
   }
 }
 
@@ -292,7 +301,7 @@ export async function getMemberByEmail(email: string) {
     return result.rows[0] || null
   } catch (error) {
     console.error("Error getting member by email:", error)
-    throw error
+    return null
   }
 }
 
@@ -340,7 +349,7 @@ export async function getAllPosts() {
     return result.rows
   } catch (error) {
     console.error("Error getting all posts:", error)
-    throw error
+    return []
   }
 }
 
@@ -356,7 +365,7 @@ export async function getPostsByTeam(teamId: string) {
     return result.rows
   } catch (error) {
     console.error("Error getting posts by team:", error)
-    throw error
+    return []
   }
 }
 
