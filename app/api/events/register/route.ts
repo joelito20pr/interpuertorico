@@ -1,193 +1,194 @@
 import { NextResponse } from "next/server"
-import { db, testDatabaseConnection } from "@/lib/db"
+import { db } from "@/lib/db"
+import { sendFreeNotification } from "@/lib/free-notification-service"
 
 export async function POST(request: Request) {
   try {
-    // First test the database connection
-    const connectionTest = await testDatabaseConnection()
-    if (!connectionTest.success) {
+    const data = await request.json()
+    const { name, guardianName, email, phone, eventId, numberOfAttendees = 1 } = data
+
+    // Validar datos requeridos
+    if (!name || !email || !eventId) {
       return NextResponse.json(
         {
           success: false,
-          error: "Database connection failed",
-          details: connectionTest.error,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Parse the request body
-    const registrationData = await request.json()
-    console.log("Registration data received:", registrationData)
-
-    // Validate required fields
-    if (!registrationData.eventId || !registrationData.name || !registrationData.email) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing required fields",
-          details: {
-            eventId: !registrationData.eventId ? "Missing eventId" : null,
-            name: !registrationData.name ? "Missing name" : null,
-            email: !registrationData.email ? "Missing email" : null,
-          },
+          error: "Faltan datos requeridos",
         },
         { status: 400 },
       )
     }
 
-    // Check if the event exists and is available for registration
-    let event
-    try {
-      event = await db`
-        SELECT * FROM "Event" WHERE id = ${registrationData.eventId}
-      `
-      console.log("Event found:", event)
-    } catch (error) {
-      console.error("Error fetching event:", error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Error fetching event",
-          details: error instanceof Error ? error.message : String(error),
-        },
-        { status: 500 },
-      )
-    }
+    // Verificar si el evento existe y está disponible para registro
+    const eventResult = await db`
+      SELECT id, title, date, location, "maxAttendees", "shareableSlug" as slug
+      FROM "Event"
+      WHERE id = ${eventId} AND "isPublic" = true
+    `
 
-    if (!event || event.length === 0) {
+    if (!eventResult || eventResult.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Event not found",
+          error: "Evento no encontrado o no disponible para registro público",
         },
         { status: 404 },
       )
     }
 
-    // Check if the event has a shareable slug (is public)
-    if (!event[0].shareableSlug) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "This event is not open for public registration",
-        },
-        { status: 403 },
-      )
-    }
+    const event = eventResult[0]
 
-    // Check if the event has reached its maximum capacity
-    if (event[0].maxAttendees) {
-      let registrationsCount
-      try {
-        registrationsCount = await db`
-          SELECT COUNT(*) as count FROM "EventRegistration" WHERE "eventId" = ${registrationData.eventId}
-        `
-        console.log("Registrations count:", registrationsCount)
-      } catch (error) {
-        console.error("Error counting registrations:", error)
+    // Verificar si hay cupo disponible
+    if (event.maxAttendees) {
+      const registrationsCount = await db`
+        SELECT COUNT(*) as count
+        FROM "EventRegistration"
+        WHERE "eventId" = ${eventId}
+      `
+
+      const currentCount = Number.parseInt(registrationsCount[0].count)
+
+      if (currentCount + numberOfAttendees > event.maxAttendees) {
         return NextResponse.json(
           {
             success: false,
-            error: "Error counting registrations",
-            details: error instanceof Error ? error.message : String(error),
-          },
-          { status: 500 },
-        )
-      }
-
-      const count = Number.parseInt(registrationsCount[0]?.count || "0")
-      const numberOfAttendees = registrationData.numberOfAttendees || 1
-
-      if (count + numberOfAttendees > event[0].maxAttendees) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Event has reached maximum capacity",
+            error: "No hay suficientes cupos disponibles para este evento",
           },
           { status: 400 },
         )
       }
     }
 
-    // Create the registration - using a simplified approach first
-    const id = `reg_${Date.now()}`
-    let result
+    // Verificar si el correo ya está registrado para este evento
+    const existingRegistration = await db`
+      SELECT id FROM "EventRegistration"
+      WHERE "eventId" = ${eventId} AND email = ${email}
+    `
 
-    try {
-      // First, check if guardianName column exists
-      const columnCheck = await db`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'EventRegistration' 
-        AND column_name = 'guardianName'
-      `
-
-      const hasGuardianNameColumn = columnCheck.length > 0
-      console.log("Has guardianName column:", hasGuardianNameColumn)
-
-      if (hasGuardianNameColumn) {
-        // Use the column if it exists
-        result = await db`
-          INSERT INTO "EventRegistration" (
-            id, "eventId", name, "guardianName", email, phone, "numberOfAttendees", "paymentStatus", "createdAt", "updatedAt"
-          ) VALUES (
-            ${id}, 
-            ${registrationData.eventId}, 
-            ${registrationData.name}, 
-            ${registrationData.guardianName || null},
-            ${registrationData.email}, 
-            ${registrationData.phone || null},
-            ${registrationData.numberOfAttendees || 1},
-            ${event[0].requiresPayment ? "PENDING" : "CONFIRMED"},
-            NOW(), 
-            NOW()
-          )
-          RETURNING *
-        `
-      } else {
-        // Fall back to the original schema without guardianName
-        result = await db`
-          INSERT INTO "EventRegistration" (
-            id, "eventId", name, email, phone, "numberOfAttendees", "paymentStatus", "createdAt", "updatedAt"
-          ) VALUES (
-            ${id}, 
-            ${registrationData.eventId}, 
-            ${registrationData.name}, 
-            ${registrationData.email}, 
-            ${registrationData.phone || null},
-            ${registrationData.numberOfAttendees || 1},
-            ${event[0].requiresPayment ? "PENDING" : "CONFIRMED"},
-            NOW(), 
-            NOW()
-          )
-          RETURNING *
-        `
-      }
-
-      console.log("Registration created:", result)
-    } catch (error) {
-      console.error("Error inserting registration:", error)
+    if (existingRegistration && existingRegistration.length > 0) {
       return NextResponse.json(
         {
           success: false,
-          error: "Error inserting registration",
-          details: error instanceof Error ? error.message : String(error),
+          error: "Este correo electrónico ya está registrado para este evento",
         },
-        { status: 500 },
+        { status: 400 },
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result[0],
-    })
+    // Crear el registro
+    try {
+      // Intentar insertar con guardianName
+      const registrationId = `reg_${Date.now()}`
+      const result = await db`
+        INSERT INTO "EventRegistration" (
+          id, name, "guardianName", email, phone, "eventId", "numberOfAttendees", "paymentStatus", "createdAt"
+        ) VALUES (
+          ${registrationId},
+          ${name},
+          ${guardianName || null},
+          ${email},
+          ${phone || null},
+          ${eventId},
+          ${numberOfAttendees},
+          'PENDING',
+          NOW()
+        )
+        RETURNING id
+      `
+
+      // Enviar notificación de confirmación
+      const notificationResult = await sendFreeNotification(
+        "registration",
+        {
+          name,
+          guardianName,
+          email,
+          phone,
+        },
+        {
+          id: event.id,
+          title: event.title,
+          date: event.date,
+          location: event.location,
+          slug: event.slug,
+        },
+      )
+
+      return NextResponse.json({
+        success: true,
+        message: "Registro completado con éxito",
+        data: {
+          id: result[0].id,
+          name,
+          email,
+        },
+        notification: {
+          emailSent: notificationResult.success,
+          whatsappLink: notificationResult.whatsappLink,
+        },
+      })
+    } catch (error) {
+      console.error("Error creating registration:", error)
+
+      // Si falla, puede ser porque la columna guardianName no existe
+      // Intentar sin guardianName
+      if (error instanceof Error && error.message.includes("guardianName")) {
+        const registrationId = `reg_${Date.now()}`
+        const result = await db`
+          INSERT INTO "EventRegistration" (
+            id, name, email, phone, "eventId", "numberOfAttendees", "paymentStatus", "createdAt"
+          ) VALUES (
+            ${registrationId},
+            ${name},
+            ${email},
+            ${phone || null},
+            ${eventId},
+            ${numberOfAttendees},
+            'PENDING',
+            NOW()
+          )
+          RETURNING id
+        `
+
+        // Enviar notificación de confirmación
+        const notificationResult = await sendFreeNotification(
+          "registration",
+          {
+            name,
+            email,
+            phone,
+          },
+          {
+            id: event.id,
+            title: event.title,
+            date: event.date,
+            location: event.location,
+            slug: event.slug,
+          },
+        )
+
+        return NextResponse.json({
+          success: true,
+          message: "Registro completado con éxito",
+          data: {
+            id: result[0].id,
+            name,
+            email,
+          },
+          notification: {
+            emailSent: notificationResult.success,
+            whatsappLink: notificationResult.whatsappLink,
+          },
+        })
+      } else {
+        throw error
+      }
+    }
   } catch (error) {
-    console.error("Error registering for event:", error)
+    console.error("Error in event registration:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Error registering for event",
+        error: "Error al procesar el registro",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
