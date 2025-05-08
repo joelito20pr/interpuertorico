@@ -3,14 +3,20 @@ import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
   const authCookie = request.cookies.get("auth_user_id")
+  const path = request.nextUrl.pathname
 
-  // If accessing dashboard routes without auth cookie, redirect to login
-  if (request.nextUrl.pathname.startsWith("/dashboard") && !authCookie) {
+  // Permitir acceso a la página principal y a la página de auspiciadores sin autenticación
+  if (path === "/" || path.startsWith("/auspiciadores") || path.startsWith("/patrocinadores")) {
+    return NextResponse.next()
+  }
+
+  // Si accede a rutas del dashboard sin cookie de autenticación, redirigir a login
+  if (path.startsWith("/dashboard") && !authCookie) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If accessing login with auth cookie, redirect to dashboard
-  if (request.nextUrl.pathname === "/login" && authCookie) {
+  // Si accede a login con cookie de autenticación, redirigir a dashboard
+  if (path === "/login" && authCookie) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
@@ -18,5 +24,14 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - images/ (public images)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|images/).*)",
+  ],
 }
