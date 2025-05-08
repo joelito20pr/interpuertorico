@@ -12,11 +12,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { createTeam } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export default function NuevoEquipoPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -34,15 +37,12 @@ export default function NuevoEquipoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError(null)
 
     try {
       // Validación básica
       if (!formData.name || !formData.category) {
-        toast({
-          title: "Error",
-          description: "Por favor complete todos los campos requeridos",
-          variant: "destructive",
-        })
+        setError("Por favor complete todos los campos requeridos")
         setIsSubmitting(false)
         return
       }
@@ -60,15 +60,12 @@ export default function NuevoEquipoPage() {
         })
         router.push("/dashboard/equipos")
       } else {
-        throw new Error(result.error || "Error al crear el equipo")
+        setError(result.error || "Error al crear el equipo. Por favor intente nuevamente.")
+        console.error("Detalles del error:", result.details)
       }
     } catch (error) {
       console.error("Error creating team:", error)
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al crear el equipo. Por favor intente nuevamente.",
-        variant: "destructive",
-      })
+      setError("Ocurrió un error al crear el equipo. Por favor intente nuevamente.")
     } finally {
       setIsSubmitting(false)
     }
@@ -83,6 +80,14 @@ export default function NuevoEquipoPage() {
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Crear Nuevo Equipo</h1>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
