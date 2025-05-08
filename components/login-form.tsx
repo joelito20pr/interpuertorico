@@ -22,8 +22,8 @@ export function LoginForm() {
       const result = await loginAction(formData)
 
       if (result.success) {
+        // Redirect immediately without refresh
         router.push("/dashboard")
-        router.refresh()
       } else {
         setError(result.error || "Error al iniciar sesión")
       }

@@ -6,41 +6,55 @@ import { DollarSign, Users, Calendar, TrendingUp, ArrowRight, ChevronRight } fro
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { getDashboardData } from "@/lib/actions"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [stats, setStats] = useState({
-    totalSponsors: 0,
+    eventCount: 0,
+    teamCount: 0,
+    memberCount: 0,
+    sponsorCount: 0,
     totalAmount: 0,
     goalAmount: 5000,
     recentSponsors: [],
     upcomingEvents: [],
   })
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate loading data
-    const timer = setTimeout(() => {
-      setStats({
-        totalSponsors: 12,
-        totalAmount: 2400,
-        goalAmount: 5000,
-        recentSponsors: [
-          { id: 1, name: "Empresa ABC", amount: "$600", date: "2023-05-01" },
-          { id: 2, name: "Juan Pérez", amount: "$150", date: "2023-04-28" },
-          { id: 3, name: "Compañía XYZ", amount: "$300", date: "2023-04-25" },
-        ],
-        upcomingEvents: [
-          { id: 1, title: "Entrenamiento especial", date: "2023-05-15", location: "Cancha Municipal" },
-          { id: 2, title: "Partido amistoso", date: "2023-05-22", location: "Centro Deportivo" },
-        ],
-      })
-      setIsLoading(false)
-    }, 1000)
+    async function loadDashboardData() {
+      try {
+        const result = await getDashboardData()
 
-    return () => clearTimeout(timer)
+        if (result.success && result.data) {
+          setStats(result.data)
+        } else {
+          setError(result.error || "Error al cargar los datos")
+        }
+      } catch (err) {
+        console.error("Error loading dashboard data:", err)
+        setError("Error al conectar con el servidor")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadDashboardData()
   }, [])
 
   const progressPercentage = (stats.totalAmount / stats.goalAmount) * 100
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return format(date, "d 'de' MMMM, yyyy", { locale: es })
+    } catch (e) {
+      return dateString
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -52,6 +66,13 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -72,22 +93,26 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Patrocinadores</CardTitle>
+            <CardTitle className="text-sm font-medium">Miembros</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalSponsors}</div>
-            <p className="text-xs text-muted-foreground">+3 este mes</p>
+            <div className="text-2xl font-bold">{isLoading ? "..." : stats.memberCount}</div>
+            <p className="text-xs text-muted-foreground">Jugadores y personal</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Próximos Eventos</CardTitle>
+            <CardTitle className="text-sm font-medium">Eventos</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.upcomingEvents.length}</div>
-            <p className="text-xs text-muted-foreground">Próximo: 15 de mayo</p>
+            <div className="text-2xl font-bold">{isLoading ? "..." : stats.eventCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats.upcomingEvents.length > 0
+                ? `Próximo: ${formatDate(stats.upcomingEvents[0]?.date)}`
+                : "No hay eventos próximos"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -120,24 +145,22 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : stats.recentSponsors.length > 0 ? (
               <div className="space-y-2">
-                {stats.recentSponsors.map((sponsor) => (
+                {stats.recentSponsors.map((sponsor: any) => (
                   <div key={sponsor.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50">
                     <div className="font-medium">{sponsor.name}</div>
-                    <div className="text-sm text-muted-foreground">{sponsor.date}</div>
-                    <div className="font-medium text-green-600">{sponsor.amount}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {sponsor.paymentDate ? formatDate(sponsor.paymentDate) : "N/A"}
+                    </div>
+                    <div className="font-medium text-green-600">${sponsor.amount}</div>
                   </div>
                 ))}
               </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">No hay patrocinadores registrados aún.</div>
             )}
           </CardContent>
-          <CardFooter>
-            <Link href="/dashboard/patrocinadores" className="text-sm text-blue-600 hover:underline flex items-center">
-              Ver todos los patrocinadores
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Link>
-          </CardFooter>
         </Card>
 
         {/* Upcoming Events */}
@@ -157,16 +180,18 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : stats.upcomingEvents.length > 0 ? (
               <div className="space-y-4">
-                {stats.upcomingEvents.map((event) => (
+                {stats.upcomingEvents.map((event: any) => (
                   <div key={event.id} className="space-y-1">
                     <div className="font-medium">{event.title}</div>
-                    <div className="text-sm text-muted-foreground">Fecha: {event.date}</div>
+                    <div className="text-sm text-muted-foreground">Fecha: {formatDate(event.date)}</div>
                     <div className="text-sm text-muted-foreground">Lugar: {event.location}</div>
                   </div>
                 ))}
               </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">No hay eventos próximos programados.</div>
             )}
           </CardContent>
           <CardFooter>
@@ -184,22 +209,30 @@ export default function DashboardPage() {
           <CardTitle>Acciones Rápidas</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Button className="w-full justify-start" variant="outline">
-            <Users className="mr-2 h-4 w-4" />
-            Añadir Patrocinador
-          </Button>
-          <Button className="w-full justify-start" variant="outline">
-            <Calendar className="mr-2 h-4 w-4" />
-            Crear Evento
-          </Button>
-          <Button className="w-full justify-start" variant="outline">
-            <DollarSign className="mr-2 h-4 w-4" />
-            Registrar Pago
-          </Button>
-          <Button className="w-full justify-start" variant="outline">
-            <ArrowRight className="mr-2 h-4 w-4" />
-            Ver Sitio Web
-          </Button>
+          <Link href="/dashboard/equipos">
+            <Button className="w-full justify-start" variant="outline">
+              <Users className="mr-2 h-4 w-4" />
+              Gestionar Equipos
+            </Button>
+          </Link>
+          <Link href="/dashboard/eventos">
+            <Button className="w-full justify-start" variant="outline">
+              <Calendar className="mr-2 h-4 w-4" />
+              Gestionar Eventos
+            </Button>
+          </Link>
+          <Link href="/dashboard/mensajes">
+            <Button className="w-full justify-start" variant="outline">
+              <ArrowRight className="mr-2 h-4 w-4" />
+              Ver Mensajes
+            </Button>
+          </Link>
+          <Link href="/" target="_blank">
+            <Button className="w-full justify-start" variant="outline">
+              <ArrowRight className="mr-2 h-4 w-4" />
+              Ver Sitio Web
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     </div>

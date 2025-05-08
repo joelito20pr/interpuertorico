@@ -11,9 +11,19 @@ export const metadata: Metadata = {
   title: "Inter Puerto Rico Futsal - Patrocinios",
   description: "Apoya a nuestro equipo de futsal en el Futsal International Championship 2025",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      {
+        url: "/favicon.ico",
+        sizes: "any",
+      },
+      {
+        url: "/icon.png",
+        type: "image/png",
+        sizes: "32x32",
+      },
+    ],
   },
-  generator: "v0.dev",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({

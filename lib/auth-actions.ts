@@ -17,6 +17,7 @@ export async function loginAction(formData: FormData) {
     return { success: false, error: "Credenciales inválidas" }
   }
 
+  // Set the auth cookie
   setAuthCookie(user.id)
 
   return { success: true, user }

@@ -17,7 +17,90 @@ export async function getUserByEmail(email: string) {
   }
 }
 
+// Dashboard functions
+export async function getDashboardStats() {
+  try {
+    // Get event count
+    const eventCountResult = await sql`SELECT COUNT(*) as count FROM "Event"`
+    const eventCount = Number.parseInt(eventCountResult.rows[0].count)
+
+    // Get team count
+    const teamCountResult = await sql`SELECT COUNT(*) as count FROM "Team"`
+    const teamCount = Number.parseInt(teamCountResult.rows[0].count)
+
+    // Get member count
+    const memberCountResult = await sql`SELECT COUNT(*) as count FROM "Member"`
+    const memberCount = Number.parseInt(memberCountResult.rows[0].count)
+
+    // Get sponsor count and total amount
+    const sponsorResult = await sql`
+      SELECT COUNT(*) as count, COALESCE(SUM(amount::numeric), 0) as total 
+      FROM "Sponsor" 
+      WHERE "paymentStatus" = 'PAID'
+    `
+    const sponsorCount = Number.parseInt(sponsorResult.rows[0].count)
+    const totalAmount = Number.parseFloat(sponsorResult.rows[0].total) || 0
+
+    // Get recent sponsors
+    const recentSponsors = await sql`
+      SELECT id, name, amount, "paymentDate", tier
+      FROM "Sponsor"
+      WHERE "paymentStatus" = 'PAID'
+      ORDER BY "paymentDate" DESC
+      LIMIT 5
+    `
+
+    // Get upcoming events
+    const upcomingEvents = await sql`
+      SELECT id, title, date, location
+      FROM "Event"
+      WHERE date > NOW()
+      ORDER BY date ASC
+      LIMIT 3
+    `
+
+    return {
+      eventCount,
+      teamCount,
+      memberCount,
+      sponsorCount,
+      totalAmount,
+      recentSponsors: recentSponsors.rows,
+      upcomingEvents: upcomingEvents.rows,
+      goalAmount: 5000, // Meta fija por ahora
+    }
+  } catch (error) {
+    console.error("Error getting dashboard stats:", error)
+    throw error
+  }
+}
+
 // Event functions
+export async function getAllEvents() {
+  try {
+    const result = await sql`
+      SELECT * FROM "Event"
+      ORDER BY date DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting all events:", error)
+    throw error
+  }
+}
+
+export async function getEventById(id: string) {
+  try {
+    const result = await sql`
+      SELECT * FROM "Event" WHERE id = ${id}
+    `
+    return result.rows[0] || null
+  } catch (error) {
+    console.error("Error getting event by id:", error)
+    throw error
+  }
+}
+
 export async function createEvent(eventData: {
   title: string
   description: string
@@ -28,13 +111,14 @@ export async function createEvent(eventData: {
   stripeLink: string | null
 }) {
   try {
+    const id = `event_${Date.now()}`
     const result = await sql`
       INSERT INTO "Event" (
-        title, description, date, location, 
-        "requiresPayment", price, "stripeLink"
+        id, title, description, date, location, 
+        "requiresPayment", price, "stripeLink", "createdAt", "updatedAt"
       ) VALUES (
-        ${eventData.title}, ${eventData.description}, ${eventData.date}, ${eventData.location},
-        ${eventData.requiresPayment}, ${eventData.price}, ${eventData.stripeLink}
+        ${id}, ${eventData.title}, ${eventData.description}, ${eventData.date}, ${eventData.location},
+        ${eventData.requiresPayment}, ${eventData.price}, ${eventData.stripeLink}, NOW(), NOW()
       )
       RETURNING *
     `
@@ -79,57 +163,52 @@ export async function updateEvent(
   }
 }
 
-// Registration functions
-export async function registerForEvent(data: {
-  eventId: string
-  playerName: string
-  parentName: string
-  phone: string
-  email: string
-  previousClub: string
-}) {
+export async function deleteEvent(id: string) {
   try {
-    const result = await sql`
-      INSERT INTO "Registration" (
-        "eventId", "playerName", "parentName", phone, email, "previousClub"
-      ) VALUES (
-        ${data.eventId}, ${data.playerName}, ${data.parentName}, 
-        ${data.phone}, ${data.email}, ${data.previousClub}
-      )
-      RETURNING *
-    `
-    return result.rows[0]
+    await sql`DELETE FROM "Event" WHERE id = ${id}`
+    return true
   } catch (error) {
-    console.error("Error registering for event:", error)
-    throw error
-  }
-}
-
-// Admin user functions
-export async function createAdminUser(name: string, email: string, password: string) {
-  try {
-    const result = await sql`
-      INSERT INTO "User" (name, email, password, role)
-      VALUES (${name}, ${email}, ${password}, 'ADMIN')
-      RETURNING *
-    `
-    return result.rows[0]
-  } catch (error) {
-    console.error("Error creating admin user:", error)
+    console.error("Error deleting event:", error)
     throw error
   }
 }
 
 // Team functions
+export async function getAllTeams() {
+  try {
+    const result = await sql`
+      SELECT * FROM "Team"
+      ORDER BY "createdAt" DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting all teams:", error)
+    throw error
+  }
+}
+
+export async function getTeamById(id: string) {
+  try {
+    const result = await sql`
+      SELECT * FROM "Team" WHERE id = ${id}
+    `
+    return result.rows[0] || null
+  } catch (error) {
+    console.error("Error getting team by id:", error)
+    throw error
+  }
+}
+
 export async function createTeam(teamData: {
   name: string
   category: string
   description: string | null
 }) {
   try {
+    const id = `team_${Date.now()}`
     const result = await sql`
-      INSERT INTO "Team" (name, category, description)
-      VALUES (${teamData.name}, ${teamData.category}, ${teamData.description})
+      INSERT INTO "Team" (id, name, category, description, "createdAt", "updatedAt")
+      VALUES (${id}, ${teamData.name}, ${teamData.category}, ${teamData.description}, NOW(), NOW())
       RETURNING *
     `
     return result.rows[0]
@@ -176,6 +255,35 @@ export async function deleteTeam(id: string) {
 }
 
 // Member functions
+export async function getAllMembers() {
+  try {
+    const result = await sql`
+      SELECT m.*, t.name as "teamName"
+      FROM "Member" m
+      LEFT JOIN "Team" t ON m."teamId" = t.id
+      ORDER BY m."createdAt" DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting all members:", error)
+    throw error
+  }
+}
+
+export async function getMembersByTeam(teamId: string) {
+  try {
+    const result = await sql`
+      SELECT * FROM "Member"
+      WHERE "teamId" = ${teamId}
+      ORDER BY "createdAt" DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting members by team:", error)
+    throw error
+  }
+}
+
 export async function getMemberByEmail(email: string) {
   try {
     const result = await sql`
@@ -188,37 +296,71 @@ export async function getMemberByEmail(email: string) {
   }
 }
 
-export async function addTeamMember(data: {
+export async function createMember(memberData: {
   teamId: string
   name: string
-  parentName: string | null
+  parentName?: string
   email: string
   phone: string
   isPlayer: boolean
   isParent: boolean
-  relatedMemberId: string | null
-  password: string | null
+  previousClub?: string
+  password?: string
 }) {
   try {
+    const id = `member_${Date.now()}`
     const result = await sql`
       INSERT INTO "Member" (
-        "teamId", name, "parentName", email, phone, 
-        "isPlayer", "isParent", "relatedMemberId", password
+        id, "teamId", name, "parentName", email, phone, 
+        "isPlayer", "isParent", "previousClub", password, "createdAt", "updatedAt"
       ) VALUES (
-        ${data.teamId}, ${data.name}, ${data.parentName}, ${data.email}, ${data.phone},
-        ${data.isPlayer}, ${data.isParent}, ${data.relatedMemberId}, ${data.password}
+        ${id}, ${memberData.teamId}, ${memberData.name}, ${memberData.parentName || null}, 
+        ${memberData.email}, ${memberData.phone}, ${memberData.isPlayer}, ${memberData.isParent}, 
+        ${memberData.previousClub || null}, ${memberData.password || null}, NOW(), NOW()
       )
       RETURNING *
     `
     return result.rows[0]
   } catch (error) {
-    console.error("Error adding team member:", error)
+    console.error("Error creating member:", error)
     throw error
   }
 }
 
-// Post functions
-export async function createPost(data: {
+// Post and message functions
+export async function getAllPosts() {
+  try {
+    const result = await sql`
+      SELECT p.*, u.name as "authorName", t.name as "teamName"
+      FROM "Post" p
+      LEFT JOIN "User" u ON p."authorId" = u.id
+      LEFT JOIN "Team" t ON p."teamId" = t.id
+      ORDER BY p."createdAt" DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting all posts:", error)
+    throw error
+  }
+}
+
+export async function getPostsByTeam(teamId: string) {
+  try {
+    const result = await sql`
+      SELECT p.*, u.name as "authorName"
+      FROM "Post" p
+      LEFT JOIN "User" u ON p."authorId" = u.id
+      WHERE p."teamId" = ${teamId}
+      ORDER BY p."createdAt" DESC
+    `
+    return result.rows
+  } catch (error) {
+    console.error("Error getting posts by team:", error)
+    throw error
+  }
+}
+
+export async function createPost(postData: {
   teamId: string
   authorId: string
   title: string
@@ -226,39 +368,19 @@ export async function createPost(data: {
   isPublic: boolean
 }) {
   try {
+    const id = `post_${Date.now()}`
     const result = await sql`
       INSERT INTO "Post" (
-        "teamId", "authorId", title, content, "isPublic"
+        id, "teamId", "authorId", title, content, "isPublic", "createdAt", "updatedAt"
       ) VALUES (
-        ${data.teamId}, ${data.authorId}, ${data.title}, ${data.content}, ${data.isPublic}
+        ${id}, ${postData.teamId}, ${postData.authorId}, ${postData.title}, 
+        ${postData.content}, ${postData.isPublic}, NOW(), NOW()
       )
       RETURNING *
     `
     return result.rows[0]
   } catch (error) {
     console.error("Error creating post:", error)
-    throw error
-  }
-}
-
-// Comment functions
-export async function createComment(data: {
-  postId: string
-  authorId: string
-  content: string
-}) {
-  try {
-    const result = await sql`
-      INSERT INTO "Comment" (
-        "postId", "authorId", content
-      ) VALUES (
-        ${data.postId}, ${data.authorId}, ${data.content}
-      )
-      RETURNING *
-    `
-    return result.rows[0]
-  } catch (error) {
-    console.error("Error creating comment:", error)
     throw error
   }
 }

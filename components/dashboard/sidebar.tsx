@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Calendar, Home, Users, MessageSquare, Settings, LogOut, DollarSign } from "lucide-react"
+import { Calendar, Home, Users, MessageSquare, Settings, LogOut } from "lucide-react"
 import { logoutAction } from "@/lib/auth-actions"
 import { cn } from "@/lib/utils"
 
@@ -11,11 +11,6 @@ const navItems = [
     name: "Dashboard",
     href: "/dashboard",
     icon: Home,
-  },
-  {
-    name: "Patrocinadores",
-    href: "/dashboard/patrocinadores",
-    icon: DollarSign,
   },
   {
     name: "Eventos",
