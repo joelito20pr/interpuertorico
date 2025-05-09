@@ -80,7 +80,7 @@ export default function Home() {
       <section className="w-full bg-gradient-to-r from-cyan-500 to-pink-500 text-white">
         <div className="container mx-auto px-4 py-16 md:py-24 flex flex-col items-center">
           <div className="w-48 h-48 relative mb-8">
-            <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" priority />
+            <Image src="/public/placeholder-logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" priority />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 text-center">Inter Puerto Rico Futsal</h1>
           <p className="text-xl mb-8 text-center max-w-3xl">
@@ -132,7 +132,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center gap-12">
             <div className="md:w-1/2 flex justify-center">
               <div className="w-64 h-64 relative">
-                <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
+                <Image src="/public/placeholder-logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
               </div>
             </div>
             <div className="md:w-1/2">
@@ -251,7 +251,7 @@ export default function Home() {
         <div className="container mx-auto px-4 text-center">
           <div className="flex justify-center mb-4">
             <div className="w-24 h-24 relative">
-              <Image src="/images/logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
+              <Image src="/public/placeholder-logo.png" alt="Inter Puerto Rico Logo" fill className="object-contain" />
             </div>
           </div>
           <p>© 2025 Inter Puerto Rico Futsal. Todos los derechos reservados.</p>
