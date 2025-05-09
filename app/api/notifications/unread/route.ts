@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
-export async function GET() {
+// Función para manejar solicitudes GET
+export async function GET(request: NextRequest) {
   try {
     // Verificar autenticación
     const session = await getServerSession(authOptions)
@@ -48,4 +49,12 @@ export async function GET() {
       { status: 500 },
     )
   }
+}
+
+// Función para manejar solicitudes POST
+export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    { success: false, message: "Método no permitido. Use GET para obtener notificaciones no leídas." },
+    { status: 405 },
+  )
 }

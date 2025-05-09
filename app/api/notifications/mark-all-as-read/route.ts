@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth"
 // Función para manejar solicitudes GET
 export async function GET(request: NextRequest) {
   return NextResponse.json(
-    { success: false, message: "Método no permitido. Use POST para marcar notificaciones como leídas." },
+    { success: false, message: "Método no permitido. Use POST para marcar todas las notificaciones como leídas." },
     { status: 405 },
   )
 }
@@ -20,31 +20,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: "No autorizado" }, { status: 401 })
     }
 
-    // Obtener el ID de la notificación del cuerpo de la solicitud
-    const data = await request.json().catch(() => ({}))
-    const id = data.id
-
-    if (!id) {
-      return NextResponse.json({ success: false, message: "ID de notificación no proporcionado" }, { status: 400 })
-    }
-
-    // Marcar la notificación como leída
+    // Marcar todas las notificaciones como leídas
     await db`
       UPDATE "Notification"
       SET read = true
-      WHERE id = ${id}
+      WHERE read = false
     `
 
     return NextResponse.json({
       success: true,
-      message: "Notificación marcada como leída",
+      message: "Todas las notificaciones marcadas como leídas",
     })
   } catch (error) {
-    console.error("Error al marcar notificación como leída:", error)
+    console.error("Error al marcar todas las notificaciones como leídas:", error)
     return NextResponse.json(
       {
         success: false,
-        message: "Error al marcar notificación como leída",
+        message: "Error al marcar todas las notificaciones como leídas",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

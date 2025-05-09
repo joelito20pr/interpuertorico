@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
-export async function GET() {
+// Función para manejar solicitudes GET
+export async function GET(request: NextRequest) {
   try {
     // Verificar si la columna ya existe
     const checkColumnExists = await db`
@@ -39,4 +40,12 @@ export async function GET() {
       { status: 500 },
     )
   }
+}
+
+// Función para manejar solicitudes POST
+export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    { success: false, message: "Método no permitido. Use GET para añadir la columna 'read'." },
+    { status: 405 },
+  )
 }
