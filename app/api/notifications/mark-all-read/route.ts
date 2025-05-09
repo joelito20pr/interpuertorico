@@ -3,6 +3,11 @@ import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+// Añadimos la función GET para manejar solicitudes GET
+export async function GET() {
+  return NextResponse.json({ success: false, message: "Método no permitido" }, { status: 405 })
+}
+
 export async function POST() {
   try {
     // Verificar autenticación
