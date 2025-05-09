@@ -17,7 +17,7 @@ export interface EventDetails {
   title: string
   date: string
   location: string
-  slug?: string
+  slug?: string // Hacemos que slug sea opcional
 }
 
 // Función principal para enviar notificaciones
@@ -41,7 +41,7 @@ export async function sendFreeNotification(
     // Nombre del destinatario (encargado o jugador)
     const recipientName = recipient.guardianName || recipient.name
 
-    // URL del evento
+    // URL del evento - Solo la incluimos si existe slug
     const eventUrl = event.slug ? `https://www.interprfc.com/eventos/${event.slug}` : ""
 
     // Contenido según el tipo de notificación

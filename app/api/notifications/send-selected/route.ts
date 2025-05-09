@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Se requiere al menos un ID de destinatario" }, { status: 400 })
     }
 
-    // Obtener información del evento
+    // Obtener información del evento - Eliminamos la columna slug que no existe
     const eventResult = await db`
-      SELECT id, title, date, location, slug FROM "Event" WHERE id = ${eventId}
+      SELECT id, title, date, location FROM "Event" WHERE id = ${eventId}
     `
 
     if (eventResult.length === 0) {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         title: event.title,
         date: event.date,
         location: event.location,
-        slug: event.slug,
+        // No incluimos slug porque no existe en la tabla
       },
       customMessage,
     )

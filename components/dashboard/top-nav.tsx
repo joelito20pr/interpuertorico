@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Menu, X, Bell } from "lucide-react"
@@ -14,15 +14,88 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Badge } from "@/components/ui/badge"
+import { formatDistanceToNow } from "date-fns"
+import { es } from "date-fns/locale"
 
 interface TopNavProps {
   userId: string
 }
 
+interface Notification {
+  id: string
+  type: string
+  message: string
+  eventId: string
+  eventTitle?: string
+  createdAt: string
+  read: boolean
+}
+
 export function TopNav({ userId }: TopNavProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null)
   const router = useRouter()
   const [userData, setUserData] = useState({ name: "Usuario", email: "usuario@ejemplo.com" })
+
+  // Función para cargar notificaciones
+  const loadNotifications = async () => {
+    try {
+      const response = await fetch("/api/notifications/unread")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setNotifications(data.notifications)
+          setUnreadCount(data.notifications.filter((n: Notification) => !n.read).length)
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar notificaciones:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Función para marcar notificaciones como leídas
+  const markAsRead = async (notificationId?: string) => {
+    try {
+      const endpoint = notificationId
+        ? `/api/notifications/mark-read?id=${notificationId}`
+        : "/api/notifications/mark-all-read"
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        await loadNotifications()
+      }
+    } catch (error) {
+      console.error("Error al marcar notificaciones como leídas:", error)
+    }
+  }
+
+  // Iniciar polling para notificaciones
+  useEffect(() => {
+    // Cargar notificaciones iniciales
+    loadNotifications()
+
+    // Configurar polling cada 30 segundos
+    pollingInterval.current = setInterval(() => {
+      loadNotifications()
+    }, 30000)
+
+    // Limpiar intervalo al desmontar
+    return () => {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // In a real app, you would fetch user data here
@@ -44,6 +117,11 @@ export function TopNav({ userId }: TopNavProps) {
       .map((n) => n[0])
       .join("")
       .toUpperCase()
+  }
+
+  // Función para navegar a la página de detalles del registro
+  const goToRegistration = (eventId: string) => {
+    router.push(`/dashboard/eventos/${eventId}/registros`)
   }
 
   return (
@@ -68,13 +146,81 @@ export function TopNav({ userId }: TopNavProps) {
           </div>
           <div className="flex-1 flex items-center justify-end">
             <div className="flex items-center">
-              <button
-                type="button"
-                className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <span className="sr-only">Ver notificaciones</span>
-                <Bell className="h-6 w-6" aria-hidden="true" />
-              </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
+                    onClick={() => loadNotifications()}
+                  >
+                    <span className="sr-only">Ver notificaciones</span>
+                    <Bell className="h-6 w-6" aria-hidden="true" />
+                    {unreadCount > 0 && (
+                      <Badge className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-red-500 text-white text-xs">
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <h3 className="font-medium">Notificaciones</h3>
+                    {unreadCount > 0 && (
+                      <button onClick={() => markAsRead()} className="text-xs text-blue-600 hover:text-blue-800">
+                        Marcar todas como leídas
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {isLoading ? (
+                      <div className="p-4 text-center text-gray-500">Cargando...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">No hay notificaciones nuevas</div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!notification.read ? "bg-blue-50" : ""}`}
+                          onClick={() => {
+                            markAsRead(notification.id)
+                            if (notification.eventId) {
+                              goToRegistration(notification.eventId)
+                            }
+                          }}
+                        >
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <div
+                                className={`w-2 h-2 rounded-full ${!notification.read ? "bg-blue-600" : "bg-gray-300"}`}
+                              ></div>
+                            </div>
+                            <div className="ml-2 flex-1">
+                              <p className="text-sm font-medium text-gray-900">
+                                {notification.type === "registration" ? "Nuevo registro" : notification.type}
+                              </p>
+                              <p className="text-sm text-gray-600 line-clamp-2">{notification.message}</p>
+                              {notification.eventTitle && (
+                                <p className="text-xs text-gray-500 mt-1">Evento: {notification.eventTitle}</p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {formatDistanceToNow(new Date(notification.createdAt), {
+                                  addSuffix: true,
+                                  locale: es,
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="p-2 border-t text-center">
+                    <Link href="/dashboard/notificaciones" className="text-sm text-blue-600 hover:text-blue-800">
+                      Ver todas las notificaciones
+                    </Link>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <div className="ml-3 relative">
                 <DropdownMenu>

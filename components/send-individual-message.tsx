@@ -2,8 +2,6 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import {
   Dialog,
@@ -14,6 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MessageSquare, Send } from "lucide-react"
 
@@ -22,13 +22,7 @@ interface SendIndividualMessageProps {
   eventTitle: string
   eventDate: string
   eventLocation: string
-  recipient: {
-    id: string
-    name: string
-    guardianName?: string
-    email: string
-    phone?: string
-  }
+  recipient: any
   onSuccess?: () => void
 }
 
@@ -44,7 +38,7 @@ export function SendIndividualMessage({
   const [isOpen, setIsOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [message, setMessage] = useState("")
-  const [subject, setSubject] = useState(`Información importante: ${eventTitle}`)
+  const [subject, setSubject] = useState(`Mensaje personal: ${eventTitle}`)
   const [sendVia, setSendVia] = useState<"email" | "whatsapp" | "both">("both")
 
   const handleSendMessage = async () => {
@@ -89,7 +83,7 @@ export function SendIndividualMessage({
         throw new Error(result.error || "Error al enviar el mensaje")
       }
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("Error sending individual message:", error)
       toast({
         title: "Error",
         description: `Error al enviar el mensaje: ${error instanceof Error ? error.message : String(error)}`,
@@ -103,7 +97,7 @@ export function SendIndividualMessage({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" title="Enviar mensaje individual">
+        <Button variant="ghost" size="sm" title="Enviar mensaje">
           <MessageSquare className="h-4 w-4" />
         </Button>
       </DialogTrigger>
@@ -111,24 +105,29 @@ export function SendIndividualMessage({
         <DialogHeader>
           <DialogTitle>Enviar mensaje individual</DialogTitle>
           <DialogDescription>
-            Envía un mensaje a {recipient.guardianName || recipient.name} para el evento "{eventTitle}".
+            Envía un mensaje personalizado a {recipient.guardianName || recipient.name}.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="bg-muted p-3 rounded-md">
-            <h4 className="font-medium mb-1">Destinatario:</h4>
-            <p>
-              <strong>Nombre:</strong> {recipient.name}
-              {recipient.guardianName && ` (${recipient.guardianName})`}
-            </p>
-            <p>
-              <strong>Email:</strong> {recipient.email}
-            </p>
+          <div className="bg-muted p-3 rounded-md space-y-2">
+            <div className="grid grid-cols-[100px_1fr] gap-1">
+              <span className="text-sm font-medium">Destinatario:</span>
+              <span className="text-sm">{recipient.guardianName || recipient.name}</span>
+            </div>
+            <div className="grid grid-cols-[100px_1fr] gap-1">
+              <span className="text-sm font-medium">Jugador:</span>
+              <span className="text-sm">{recipient.name}</span>
+            </div>
+            <div className="grid grid-cols-[100px_1fr] gap-1">
+              <span className="text-sm font-medium">Email:</span>
+              <span className="text-sm">{recipient.email}</span>
+            </div>
             {recipient.phone && (
-              <p>
-                <strong>Teléfono:</strong> {recipient.phone}
-              </p>
+              <div className="grid grid-cols-[100px_1fr] gap-1">
+                <span className="text-sm font-medium">Teléfono:</span>
+                <span className="text-sm">{recipient.phone}</span>
+              </div>
             )}
           </div>
 

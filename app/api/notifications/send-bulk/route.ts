@@ -10,9 +10,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "ID del evento es requerido" }, { status: 400 })
     }
 
-    // Obtener información del evento
+    // Obtener información del evento - Eliminamos la columna slug que no existe
     const eventResult = await db`
-      SELECT id, title, date, location, slug FROM "Event" WHERE id = ${eventId}
+      SELECT id, title, date, location FROM "Event" WHERE id = ${eventId}
     `
 
     if (eventResult.length === 0) {
@@ -22,25 +22,18 @@ export async function POST(request: NextRequest) {
     const event = eventResult[0]
 
     // Obtener todos los registros para el evento
-    const registrationsQuery = db`
-      SELECT id, name, "guardianName", email, phone 
-      FROM "EventRegistration" 
-      WHERE "eventId" = ${eventId}
+    const registrationsResult = await db`
+      SELECT id, name, "guardianName", email, phone FROM "EventRegistration" WHERE "eventId" = ${eventId}
     `
 
-    const registrations = await registrationsQuery
-
-    if (registrations.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "No hay participantes registrados para este evento" },
-        { status: 404 },
-      )
+    if (registrationsResult.length === 0) {
+      return NextResponse.json({ success: false, error: "No hay registros para este evento" }, { status: 404 })
     }
 
     // Filtrar destinatarios según el método de envío
-    let filteredRecipients = registrations
+    let filteredRecipients = registrationsResult
     if (sendVia === "whatsapp") {
-      filteredRecipients = registrations.filter((r) => r.phone)
+      filteredRecipients = registrationsResult.filter((r) => r.phone)
     }
 
     if (filteredRecipients.length === 0) {
@@ -62,7 +55,7 @@ export async function POST(request: NextRequest) {
         title: event.title,
         date: event.date,
         location: event.location,
-        slug: event.slug,
+        // No incluimos slug porque no existe en la tabla
       },
       customMessage,
     )
