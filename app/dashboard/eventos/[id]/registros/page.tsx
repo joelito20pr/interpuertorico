@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw, Trash2, User } from "lucide-react"
+import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw, Trash2, User, Mail } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { SendReminderButton } from "@/components/send-reminder-button"
 import { RegistrationEditor } from "@/components/registration-editor"
 import { MessageSender } from "@/components/message-sender"
 import { SendIndividualMessage } from "@/components/send-individual-message"
+import { SendConfirmationEmail } from "@/components/send-confirmation-email"
 
 export default function RegistrosEventoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -301,6 +302,50 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                 Mensaje individual
               </MessageSender>
 
+              {/* Botón para enviar correos de confirmación a todos */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  toast({
+                    title: "Enviando correos de confirmación",
+                    description: "Se están enviando correos de confirmación a todos los participantes...",
+                  })
+
+                  // Implementar lógica para enviar correos a todos
+                  fetch("/api/send-confirmation-emails", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      eventId: params.id,
+                    }),
+                  })
+                    .then((response) => response.json())
+                    .then((data) => {
+                      if (data.success) {
+                        toast({
+                          title: "Correos enviados",
+                          description: `Se han enviado ${data.count} correos de confirmación.`,
+                        })
+                      } else {
+                        throw new Error(data.message || "Error al enviar los correos")
+                      }
+                    })
+                    .catch((error) => {
+                      console.error("Error sending confirmation emails:", error)
+                      toast({
+                        title: "Error",
+                        description: `Error al enviar los correos: ${error instanceof Error ? error.message : String(error)}`,
+                        variant: "destructive",
+                      })
+                    })
+                }}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Enviar confirmaciones
+              </Button>
+
               <SendReminderButton
                 eventId={params.id}
                 eventTitle={event.title}
@@ -393,6 +438,13 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                             <TableCell>{formatDate(registration.createdAt)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-1">
+                                {/* Botón para enviar correo de confirmación individual */}
+                                <SendConfirmationEmail
+                                  registration={registration}
+                                  event={event}
+                                  onSuccess={handleRefresh}
+                                />
+
                                 <SendIndividualMessage
                                   eventId={params.id}
                                   eventTitle={event.title}
