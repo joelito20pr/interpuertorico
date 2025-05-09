@@ -45,7 +45,8 @@ export function TopNav({ userId }: TopNavProps) {
   // Función para cargar notificaciones
   const loadNotifications = async () => {
     try {
-      const response = await fetch("/api/notifications/unread")
+      setIsLoading(true)
+      const response = await fetch("/api/notifications?action=unread")
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
@@ -64,8 +65,8 @@ export function TopNav({ userId }: TopNavProps) {
   const markAsRead = async (notificationId?: string) => {
     try {
       const endpoint = notificationId
-        ? `/api/notifications/mark-read?id=${notificationId}`
-        : "/api/notifications/mark-all-read"
+        ? `/api/notifications?action=mark-read&id=${notificationId}`
+        : "/api/notifications?action=mark-all-read"
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -180,7 +181,9 @@ export function TopNav({ userId }: TopNavProps) {
                       notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!notification.read ? "bg-blue-50" : ""}`}
+                          className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${
+                            !notification.read ? "bg-blue-50" : ""
+                          }`}
                           onClick={() => {
                             markAsRead(notification.id)
                             if (notification.eventId) {
