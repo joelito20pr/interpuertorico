@@ -28,7 +28,7 @@ interface Registration {
 
 interface RegistrationEditorProps {
   registration: Registration
-  onSave: () => void
+  onSave: (updatedRegistration: Registration) => void
   onCancel: () => void
 }
 
@@ -81,11 +81,19 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
         throw new Error(errorData.message || "Error al actualizar el registro")
       }
 
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Error al actualizar el registro")
+      }
+
       toast({
         title: "Registro actualizado",
         description: "La información del registro ha sido actualizada correctamente.",
       })
-      onSave()
+
+      // Llamar a onSave con los datos actualizados
+      onSave(formData)
     } catch (error) {
       console.error("Error updating registration:", error)
       toast({
@@ -147,7 +155,7 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
             <div className="space-y-2">
               <Label htmlFor="confirmationStatus">Estado de confirmación</Label>
               <Select
-                value={formData.confirmationStatus}
+                value={formData.confirmationStatus || "PENDING"}
                 onValueChange={(value) => handleSelectChange("confirmationStatus", value)}
               >
                 <SelectTrigger>

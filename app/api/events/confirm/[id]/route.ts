@@ -8,6 +8,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const confirm = searchParams.get("confirm")
     const eventId = params.id
 
+    console.log("Confirmación recibida:", { eventId, email, confirm })
+
     if (!email || !confirm || !eventId) {
       return NextResponse.json(
         {
@@ -19,13 +21,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     // Verificar si existe el registro
-    const registration = await db`
-      SELECT id FROM "EventRegistration" 
+    const registrations = await db`
+      SELECT id, "confirmationStatus" FROM "EventRegistration" 
       WHERE "eventId" = ${eventId} 
       AND email = ${email}
     `
 
-    if (registration.length === 0) {
+    console.log("Registros encontrados:", registrations)
+
+    if (registrations.length === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -38,13 +42,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
     // Actualizar el estado de confirmación
     const confirmationStatus = confirm === "yes" ? "CONFIRMED" : "DECLINED"
 
-    await db`
+    const updateResult = await db`
       UPDATE "EventRegistration" 
       SET "confirmationStatus" = ${confirmationStatus}, 
           "updatedAt" = NOW() 
-      WHERE "eventId" = ${eventId} 
-      AND email = ${email}
+      WHERE id = ${registrations[0].id}
+      RETURNING id, "confirmationStatus"
     `
+
+    console.log("Resultado de actualización:", updateResult)
 
     // Obtener información del evento para la página de confirmación
     const event = await db`
@@ -101,6 +107,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
             text-decoration: none;
             border-radius: 5px;
             margin-top: 20px;
+            font-weight: bold;
           }
         </style>
       </head>
