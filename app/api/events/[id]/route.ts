@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { db, testDatabaseConnection } from "@/lib/db"
+import { db } from "@/lib/db"
 import { corsHeaders } from "@/lib/api-utils"
 
 // Add OPTIONS method for CORS
@@ -12,21 +12,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     const id = params.id
     console.log(`Attempting to delete event with ID: ${id}`)
 
-    // First test the database connection
-    const connectionTest = await testDatabaseConnection()
-    if (!connectionTest.success) {
-      console.error("Database connection failed:", connectionTest.error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database connection failed",
-          details: connectionTest.error,
-        },
-        { status: 500, headers: corsHeaders },
-      )
-    }
-
-    // Check if the event exists before deleting
+    // First check if the event exists
     const eventCheck = await db`SELECT id FROM "Event" WHERE id = ${id}`
     if (!eventCheck || eventCheck.length === 0) {
       console.error(`Event with ID ${id} not found`)
@@ -39,19 +25,79 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       )
     }
 
-    // Delete the event
-    await db`DELETE FROM "Event" WHERE id = ${id}`
-    console.log(`Successfully deleted event with ID: ${id}`)
+    // Check if there are registrations for this event
+    const registrationsCheck = await db`
+      SELECT EXISTS (
+        SELECT 1 FROM "EventRegistration" WHERE "eventId" = ${id}
+      ) as has_registrations
+    `
 
+    const hasRegistrations = registrationsCheck[0]?.has_registrations
+
+    // If there are registrations, delete them first
+    if (hasRegistrations) {
+      console.log(`Deleting registrations for event ${id}`)
+      try {
+        await db`DELETE FROM "EventRegistration" WHERE "eventId" = ${id}`
+      } catch (regError) {
+        console.error(`Error deleting registrations for event ${id}:`, regError)
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Error deleting event registrations",
+            details: regError instanceof Error ? regError.message : String(regError),
+          },
+          { status: 500, headers: corsHeaders },
+        )
+      }
+    }
+
+    // Check if there are notifications for this event
+    try {
+      const notificationsCheck = await db`
+        SELECT EXISTS (
+          SELECT 1 FROM "Notification" WHERE "eventId" = ${id}
+        ) as has_notifications
+      `
+
+      const hasNotifications = notificationsCheck[0]?.has_notifications
+
+      // If there are notifications, delete them
+      if (hasNotifications) {
+        console.log(`Deleting notifications for event ${id}`)
+        await db`DELETE FROM "Notification" WHERE "eventId" = ${id}`
+      }
+    } catch (notifError) {
+      // Just log the error but continue with event deletion
+      console.error(`Error checking/deleting notifications for event ${id}:`, notifError)
+    }
+
+    // Now delete the event
+    console.log(`Deleting event ${id}`)
+    try {
+      await db`DELETE FROM "Event" WHERE id = ${id}`
+    } catch (eventError) {
+      console.error(`Error deleting event ${id}:`, eventError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Error deleting event",
+          details: eventError instanceof Error ? eventError.message : String(eventError),
+        },
+        { status: 500, headers: corsHeaders },
+      )
+    }
+
+    console.log(`Successfully deleted event with ID: ${id}`)
     return NextResponse.json(
       {
         success: true,
-        message: "Event deleted successfully",
+        message: "Event and all related data deleted successfully",
       },
       { headers: corsHeaders },
     )
   } catch (error) {
-    console.error("Error deleting event:", error)
+    console.error("Error in DELETE event:", error)
     return NextResponse.json(
       {
         success: false,
@@ -68,89 +114,30 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const id = params.id
     console.log(`Attempting to get event with ID: ${id}`)
 
-    // First test the database connection
-    const connectionTest = await testDatabaseConnection()
-    if (!connectionTest.success) {
-      console.error("Database connection failed:", connectionTest.error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database connection failed",
-          details: connectionTest.error,
-          recommendation: "Check your database connection string and make sure the database is running",
-        },
-        { status: 500, headers: corsHeaders },
-      )
-    }
-
-    // Check if Event table exists
-    const tableCheck = await db`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'Event'
-      ) as exists
+    // Get the event
+    const result = await db`
+      SELECT * FROM "Event" WHERE id = ${id}
     `
 
-    if (!tableCheck[0]?.exists) {
-      console.error("Event table does not exist")
+    if (!result || result.length === 0) {
+      console.error(`Event with ID ${id} not found`)
       return NextResponse.json(
         {
           success: false,
-          error: "Event table does not exist",
-          recommendation: "Run /api/repair-database to create required tables",
+          error: "Event not found",
         },
         { status: 404, headers: corsHeaders },
       )
     }
 
-    // Get the event with better error handling
-    try {
-      // Log the query we're about to execute for debugging
-      console.log(`Executing query: SELECT * FROM "Event" WHERE id = ${id}`)
-
-      const result = await db`
-        SELECT * FROM "Event" WHERE id = ${id}
-      `
-
-      console.log(`Query result:`, result)
-
-      if (!result || result.length === 0) {
-        // If not found, list all available events to help debugging
-        const allEvents = await db`SELECT id, title FROM "Event" LIMIT 10`
-
-        console.error(`Event with ID ${id} not found. Available events:`, allEvents)
-
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Event not found",
-            message: `No event found with ID: ${id}`,
-            availableEvents: allEvents.length > 0 ? allEvents : "No events in database",
-            recommendation: "Check the event ID or create a new event",
-          },
-          { status: 404, headers: corsHeaders },
-        )
-      }
-
-      console.log(`Successfully retrieved event with ID: ${id}`)
-      return NextResponse.json(
-        {
-          success: true,
-          data: result[0],
-        },
-        { headers: corsHeaders },
-      )
-    } catch (queryError) {
-      console.error("Database query error:", queryError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database query error",
-          details: queryError instanceof Error ? queryError.message : String(queryError),
-        },
-        { status: 500, headers: corsHeaders },
-      )
-    }
+    console.log(`Successfully retrieved event with ID: ${id}`)
+    return NextResponse.json(
+      {
+        success: true,
+        data: result[0],
+      },
+      { headers: corsHeaders },
+    )
   } catch (error) {
     console.error("Error getting event:", error)
     return NextResponse.json(
@@ -168,20 +155,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   try {
     const id = params.id
     console.log(`Attempting to update event with ID: ${id}`)
-
-    // First test the database connection
-    const connectionTest = await testDatabaseConnection()
-    if (!connectionTest.success) {
-      console.error("Database connection failed:", connectionTest.error)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database connection failed",
-          details: connectionTest.error,
-        },
-        { status: 500, headers: corsHeaders },
-      )
-    }
 
     // Check if the event exists before updating
     const eventCheck = await db`SELECT id FROM "Event" WHERE id = ${id}`
@@ -227,6 +200,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           "stripeLink" = ${eventData.stripeLink || null},
           "shareableSlug" = ${eventData.shareableSlug || null},
           "maxAttendees" = ${eventData.maxAttendees || null},
+          "isPublic" = ${eventData.isPublic !== undefined ? eventData.isPublic : true},
           "updatedAt" = NOW()
         WHERE id = ${id}
         RETURNING *

@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Download, Search, Users, Calendar, MapPin } from "lucide-react"
+import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { SendReminderButton } from "@/components/send-reminder-button"
 import { SendCustomMessage } from "@/components/send-custom-message"
+import { RegistrationEditor } from "@/components/registration-editor"
 
 export default function RegistrosEventoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -20,49 +21,53 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
   const [registrations, setRegistrations] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredRegistrations, setFilteredRegistrations] = useState<any[]>([])
+  const [editingRegistration, setEditingRegistration] = useState<any>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+      // Cargar información del evento
+      const eventResponse = await fetch(`/api/events/${params.id}`)
+      if (!eventResponse.ok) {
+        throw new Error(`HTTP error! status: ${eventResponse.status}`)
+      }
+      const eventResult = await eventResponse.json()
+
+      if (!eventResult.success) {
+        throw new Error(eventResult.error || "Error al cargar el evento")
+      }
+
+      setEvent(eventResult.data)
+
+      // Cargar registros del evento
+      const registrationsResponse = await fetch(`/api/events/${params.id}/registrations`)
+      if (!registrationsResponse.ok) {
+        throw new Error(`HTTP error! status: ${registrationsResponse.status}`)
+      }
+
+      const registrationsResult = await registrationsResponse.json()
+
+      if (!registrationsResult.success) {
+        throw new Error(registrationsResult.error || "Error al cargar los registros")
+      }
+
+      setRegistrations(registrationsResult.data.registrations)
+      setFilteredRegistrations(registrationsResult.data.registrations)
+    } catch (error) {
+      console.error("Error loading data:", error)
+      toast({
+        title: "Error",
+        description: `Error al cargar los datos: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        // Cargar información del evento
-        const eventResponse = await fetch(`/api/events/${params.id}`)
-        if (!eventResponse.ok) {
-          throw new Error(`HTTP error! status: ${eventResponse.status}`)
-        }
-        const eventResult = await eventResponse.json()
-
-        if (!eventResult.success) {
-          throw new Error(eventResult.error || "Error al cargar el evento")
-        }
-
-        setEvent(eventResult.data)
-
-        // Cargar registros del evento
-        const registrationsResponse = await fetch(`/api/events/${params.id}/registrations`)
-        if (!registrationsResponse.ok) {
-          throw new Error(`HTTP error! status: ${registrationsResponse.status}`)
-        }
-
-        const registrationsResult = await registrationsResponse.json()
-
-        if (!registrationsResult.success) {
-          throw new Error(registrationsResult.error || "Error al cargar los registros")
-        }
-
-        setRegistrations(registrationsResult.data.registrations)
-        setFilteredRegistrations(registrationsResult.data.registrations)
-      } catch (error) {
-        console.error("Error loading data:", error)
-        toast({
-          title: "Error",
-          description: `Error al cargar los datos: ${error instanceof Error ? error.message : String(error)}`,
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     loadData()
   }, [params.id, toast])
 
@@ -144,6 +149,57 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
     }
   }
 
+  const handleEditRegistration = (registration: any) => {
+    setEditingRegistration(registration)
+  }
+
+  const handleSaveRegistration = async (updatedRegistration: any) => {
+    try {
+      const response = await fetch(`/api/events/registrations/${updatedRegistration.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedRegistration),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Error al actualizar el registro")
+      }
+
+      toast({
+        title: "Registro actualizado",
+        description: "La información del registro ha sido actualizada correctamente.",
+      })
+
+      // Actualizar la lista de registros
+      setRegistrations((prevRegistrations) =>
+        prevRegistrations.map((reg) => (reg.id === updatedRegistration.id ? updatedRegistration : reg)),
+      )
+
+      // Cerrar el editor
+      setEditingRegistration(null)
+    } catch (error) {
+      console.error("Error updating registration:", error)
+      toast({
+        title: "Error",
+        description: `Error al actualizar el registro: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    loadData()
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-full">
@@ -170,120 +226,154 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <Button variant="ghost" onClick={() => router.back()} className="mr-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">Registros del Evento</h1>
-        </div>
-        <div className="flex gap-2">
-          <SendCustomMessage
-            eventId={params.id}
-            eventTitle={event.title}
-            eventDate={event.date}
-            eventLocation={event.location}
-            registrationCount={registrations.length}
+      {editingRegistration ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={() => setEditingRegistration(null)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver a la lista
+            </Button>
+            <h1 className="text-2xl font-bold tracking-tight">Editar Registro</h1>
+          </div>
+          <RegistrationEditor
+            registration={editingRegistration}
+            onSave={handleSaveRegistration}
+            onCancel={() => setEditingRegistration(null)}
           />
-          <SendReminderButton
-            eventId={params.id}
-            eventTitle={event.title}
-            eventDate={event.date}
-            eventLocation={event.location}
-            registrationCount={registrations.length}
-          />
-          <Button variant="outline" onClick={handleExportCSV} disabled={registrations.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
         </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{event.title}</CardTitle>
-          <CardDescription>
-            <div className="flex flex-col space-y-1">
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span>{formatDate(event.date)}</span>
-              </div>
-              <div className="flex items-center">
-                <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span>{event.location}</span>
-              </div>
-              <div className="flex items-center">
-                <Users className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span>
-                  {registrations.length} {registrations.length === 1 ? "registro" : "registros"}
-                  {event.maxAttendees ? ` de ${event.maxAttendees} disponibles` : ""}
-                </span>
-              </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Button variant="ghost" onClick={() => router.back()} className="mr-4">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
+              </Button>
+              <h1 className="text-2xl font-bold tracking-tight">Registros del Evento</h1>
             </div>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar por nombre, email o teléfono..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                Actualizar
+              </Button>
+              <SendCustomMessage
+                eventId={params.id}
+                eventTitle={event.title}
+                eventDate={event.date}
+                eventLocation={event.location}
+                registrationCount={registrations.length}
               />
+              <SendReminderButton
+                eventId={params.id}
+                eventTitle={event.title}
+                eventDate={event.date}
+                eventLocation={event.location}
+                registrationCount={registrations.length}
+              />
+              <Button variant="outline" onClick={handleExportCSV} disabled={registrations.length === 0}>
+                <Download className="h-4 w-4 mr-2" />
+                Exportar CSV
+              </Button>
             </div>
           </div>
 
-          {filteredRegistrations.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">
-              {registrations.length === 0
-                ? "No hay registros para este evento."
-                : "No se encontraron resultados para la búsqueda."}
-            </p>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre Jugador</TableHead>
-                    <TableHead>Nombre Encargado</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead className="text-center">Cantidad</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Fecha</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRegistrations.map((registration) => {
-                    const statusInfo = getStatusInfo(registration.paymentStatus)
-                    return (
-                      <TableRow key={registration.id}>
-                        <TableCell className="font-medium">{registration.name}</TableCell>
-                        <TableCell>{registration.guardianName || "-"}</TableCell>
-                        <TableCell>{registration.email}</TableCell>
-                        <TableCell>{registration.phone || "-"}</TableCell>
-                        <TableCell className="text-center">{registration.numberOfAttendees}</TableCell>
-                        <TableCell>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}
-                          >
-                            {statusInfo.text}
-                          </span>
-                        </TableCell>
-                        <TableCell>{formatDate(registration.createdAt)}</TableCell>
+          <Card>
+            <CardHeader>
+              <CardTitle>{event.title}</CardTitle>
+              <CardDescription>
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>{formatDate(event.date)}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>{event.location}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>
+                      {registrations.length} {registrations.length === 1 ? "registro" : "registros"}
+                      {event.maxAttendees ? ` de ${event.maxAttendees} disponibles` : ""}
+                    </span>
+                  </div>
+                </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar por nombre, email o teléfono..."
+                    className="pl-8"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {filteredRegistrations.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">
+                  {registrations.length === 0
+                    ? "No hay registros para este evento."
+                    : "No se encontraron resultados para la búsqueda."}
+                </p>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre Jugador</TableHead>
+                        <TableHead>Nombre Encargado</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Teléfono</TableHead>
+                        <TableHead className="text-center">Cantidad</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRegistrations.map((registration) => {
+                        const statusInfo = getStatusInfo(registration.confirmationStatus || "PENDING")
+                        return (
+                          <TableRow key={registration.id}>
+                            <TableCell className="font-medium">{registration.name}</TableCell>
+                            <TableCell>{registration.guardianName || "-"}</TableCell>
+                            <TableCell>{registration.email}</TableCell>
+                            <TableCell>{registration.phone || "-"}</TableCell>
+                            <TableCell className="text-center">{registration.numberOfAttendees || 1}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}
+                              >
+                                {statusInfo.text}
+                              </span>
+                            </TableCell>
+                            <TableCell>{formatDate(registration.createdAt)}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditRegistration(registration)}
+                                title="Editar registro"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
