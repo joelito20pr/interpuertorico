@@ -69,7 +69,7 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
 
     try {
       // Log the data being sent
-      console.log("Sending data to API:", formData)
+      console.log("Enviando datos para actualización:", formData)
 
       const response = await fetch(`/api/events/registrations/${registration.id}`, {
         method: "PUT",
@@ -80,19 +80,13 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
       })
 
       // Log the response status
-      console.log("API response status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("API error response:", errorData)
-        throw new Error(errorData.message || "Error al actualizar el registro")
-      }
+      console.log("Estado de la respuesta API:", response.status)
 
       const result = await response.json()
-      console.log("API success response:", result)
+      console.log("Respuesta completa de la API:", result)
 
       if (!result.success) {
-        throw new Error(result.error || "Error al actualizar el registro")
+        throw new Error(result.message || "Error al actualizar el registro")
       }
 
       toast({
@@ -100,10 +94,10 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
         description: "La información del registro ha sido actualizada correctamente.",
       })
 
-      // Call onSave with the updated data from the API response
-      onSave(result.data)
+      // Call onSave with the updated data
+      onSave(result.data || formData)
     } catch (error) {
-      console.error("Error updating registration:", error)
+      console.error("Error al actualizar registro:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Error al actualizar el registro",

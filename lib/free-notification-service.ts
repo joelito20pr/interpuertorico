@@ -1,6 +1,6 @@
-import { db } from "./db"
-import { sendEmail, generateRegistrationEmailContent } from "./email-service"
-import { generateWhatsAppLink, generateWhatsAppLinks } from "./whatsapp-service"
+import { sendEmailNotification } from "@/lib/email-service"
+import { generateWhatsAppLink } from "@/lib/whatsapp-service"
+import { db } from "@/lib/db"
 
 // Tipos para nuestras notificaciones
 export type NotificationType = "registration" | "reminder" | "custom"
@@ -28,162 +28,136 @@ export async function sendFreeNotification(
   customMessage?: string,
 ) {
   try {
-    console.log("Sending notification:", { type, recipient, event })
+    // Formatear fecha del evento
+    const formattedDate = new Date(event.date).toLocaleDateString("es-PR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
 
-    // Resultados de los envíos
-    let whatsappLink = null
-    let emailResult = null
+    // Nombre del destinatario (encargado o jugador)
+    const recipientName = recipient.guardianName || recipient.name
 
-    // Enviar Email
-    try {
-      // Generar contenido del correo según el tipo
-      let emailContent = ""
-      let emailSubject = ""
+    // URL del evento
+    const eventUrl = event.slug ? `https://www.interprfc.com/eventos/${event.slug}` : ""
 
-      if (type === "registration") {
-        emailContent = generateRegistrationEmailContent({
-          name: recipient.name,
-          eventTitle: event.title,
-          eventDate: event.date,
-          eventLocation: event.location,
-          eventId: event.id,
-          email: recipient.email,
-          guardianName: recipient.guardianName,
-        })
-        emailSubject = `Confirmación de Registro: ${event.title}`
-      } else if (type === "reminder") {
-        // Contenido para recordatorio
-        emailContent = generateRegistrationEmailContent({
-          name: recipient.name,
-          eventTitle: event.title,
-          eventDate: event.date,
-          eventLocation: event.location,
-          eventId: event.id,
-          email: recipient.email,
-          guardianName: recipient.guardianName,
-        }).replace("¡Registro Confirmado!", "Recordatorio de Evento")
-        emailSubject = `Recordatorio: ${event.title}`
-      } else if (type === "custom" && customMessage) {
-        // Contenido para mensaje personalizado
-        emailContent = generateRegistrationEmailContent({
-          name: recipient.name,
-          eventTitle: event.title,
-          eventDate: event.date,
-          eventLocation: event.location,
-          eventId: event.id,
-          email: recipient.email,
-          guardianName: recipient.guardianName,
-        }).replace("¡Registro Confirmado!", "Mensaje Importante")
+    // Contenido según el tipo de notificación
+    let whatsappMessage = ""
+    let emailSubject = ""
+    let emailBody = ""
 
-        // Insertar mensaje personalizado
-        emailContent = emailContent.replace(
-          "Tu registro para el evento",
-          `${customMessage}<br><br>Información del evento`,
-        )
+    if (type === "registration") {
+      // Mensaje para nuevo registro
+      whatsappMessage = `¡Hola ${recipientName}! Tu registro para el evento "${event.title}" ha sido confirmado.\n\n📅 Fecha: ${formattedDate}\n📍 Ubicación: ${event.location}\n\nGracias por registrarte. Te enviaremos recordatorios antes del evento.`
 
-        emailSubject = `Mensaje Importante: ${event.title}`
-      }
+      emailSubject = `Confirmación de registro: ${event.title}`
+      emailBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0066cc;">¡Gracias por registrarte!</h2>
+          <p>Hola ${recipientName},</p>
+          <p>Tu registro para el evento <strong>"${event.title}"</strong> ha sido confirmado.</p>
+          <p><strong>Detalles del evento:</strong></p>
+          <ul>
+            <li><strong>Fecha:</strong> ${formattedDate}</li>
+            <li><strong>Ubicación:</strong> ${event.location}</li>
+            <li><strong>Jugador:</strong> ${recipient.name}</li>
+          </ul>
+          ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
+          <p>Te enviaremos recordatorios antes del evento.</p>
+          <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
+        </div>
+      `
+    } else if (type === "reminder") {
+      // Mensaje para recordatorio
+      whatsappMessage = `¡Hola ${recipientName}! Te recordamos que el evento "${event.title}" está programado para mañana.\n\n📅 Fecha: ${formattedDate}\n📍 Ubicación: ${event.location}\n\n¡Esperamos verte allí!`
 
-      // Enviar el correo
-      emailResult = await sendEmail({
-        to: recipient.email,
-        subject: emailSubject,
-        html: emailContent,
-        eventId: event.id,
-      })
-    } catch (error) {
-      console.error("Error sending Email:", error)
-      emailResult = { success: false, error }
+      emailSubject = `Recordatorio: ${event.title} - Mañana`
+      emailBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0066cc;">Recordatorio de evento</h2>
+          <p>Hola ${recipientName},</p>
+          <p>Te recordamos que el evento <strong>"${event.title}"</strong> está programado para mañana.</p>
+          <p><strong>Detalles del evento:</strong></p>
+          <ul>
+            <li><strong>Fecha:</strong> ${formattedDate}</li>
+            <li><strong>Ubicación:</strong> ${event.location}</li>
+          </ul>
+          ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
+          <p>¡Esperamos verte allí!</p>
+          <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
+        </div>
+      `
+    } else if (type === "custom" && customMessage) {
+      // Mensaje personalizado
+      whatsappMessage = `¡Hola ${recipientName}! ${customMessage}\n\nEvento: ${event.title}\n📅 Fecha: ${formattedDate}\n📍 Ubicación: ${event.location}`
+
+      emailSubject = `Mensaje importante: ${event.title}`
+      emailBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0066cc;">Mensaje importante</h2>
+          <p>Hola ${recipientName},</p>
+          <p>${customMessage}</p>
+          <p><strong>Detalles del evento:</strong></p>
+          <ul>
+            <li><strong>Evento:</strong> ${event.title}</li>
+            <li><strong>Fecha:</strong> ${formattedDate}</li>
+            <li><strong>Ubicación:</strong> ${event.location}</li>
+          </ul>
+          ${eventUrl ? `<p>Puedes ver los detalles del evento en: <a href="${eventUrl}">${eventUrl}</a></p>` : ""}
+          <p>Gracias,<br>Equipo de Inter Puerto Rico</p>
+        </div>
+      `
+    } else {
+      // Valor por defecto
+      whatsappMessage = `Notificación de Inter Puerto Rico: Evento "${event.title}" - ${formattedDate}`
+      emailSubject = `Notificación: ${event.title}`
+      emailBody = `<p>Notificación de Inter Puerto Rico para el evento "${event.title}" el ${formattedDate}</p>`
     }
 
-    // Generar enlace de WhatsApp si hay número de teléfono
-    if (recipient.phone && process.env.ENABLE_WHATSAPP_LINKS === "true") {
-      try {
-        // Crear mensaje según el tipo
-        let message = ""
+    // Enviar correo electrónico
+    const emailResult = await sendEmailNotification({
+      to: recipient.email,
+      subject: emailSubject,
+      html: emailBody,
+      eventId: event.id,
+    })
 
-        // Nombre del destinatario (encargado o jugador)
-        const recipientName = recipient.guardianName || recipient.name
-
-        // Formatear fecha del evento
-        const formattedDate = new Date(event.date).toLocaleDateString("es-ES", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-
-        if (type === "registration") {
-          message = `¡Hola ${recipientName}! Tu registro para el evento *${event.title}* ha sido confirmado.
-
-*Fecha:* ${formattedDate}
-*Ubicación:* ${event.location}
-*Jugador:* ${recipient.name}
-
-Gracias por registrarte. ¡Esperamos verte pronto!`
-        } else if (type === "reminder") {
-          message = `¡Hola ${recipientName}! Te recordamos que el evento *${event.title}* está programado para pronto.
-
-*Fecha:* ${formattedDate}
-*Ubicación:* ${event.location}
-*Jugador:* ${recipient.name}
-
-¡Esperamos verte allí!`
-        } else if (type === "custom" && customMessage) {
-          message = `¡Hola ${recipientName}! ${customMessage}
-
-*Evento:* ${event.title}
-*Fecha:* ${formattedDate}
-*Ubicación:* ${event.location}
-*Jugador:* ${recipient.name}`
-        }
-
-        whatsappLink = generateWhatsAppLink(recipient.phone, message)
-        console.log("WhatsApp link generated:", whatsappLink)
-      } catch (error) {
-        console.error("Error generating WhatsApp link:", error)
-      }
+    // Generar enlace de WhatsApp
+    let whatsappLink = null
+    if (recipient.phone) {
+      whatsappLink = generateWhatsAppLink(recipient.phone, whatsappMessage)
     }
 
     // Registrar la notificación en la base de datos
-    try {
-      const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-      await db`
-        INSERT INTO "Notification" (
-          id, type, recipient, "recipientEmail", message, "eventId", status, "createdAt"
-        ) VALUES (
-          ${notificationId},
-          ${type},
-          ${recipient.phone || null},
-          ${recipient.email},
-          ${customMessage || `Notificación de ${type} para el evento ${event.title}`},
-          ${event.id},
-          ${emailResult?.success ? "SENT" : "FAILED"},
-          NOW()
-        )
-      `.catch((err) => {
-        console.error("Error inserting notification record:", err)
-        // Continue even if DB insert fails
-      })
-    } catch (error) {
-      console.error("Error logging notification to database:", error)
-      // Continue even if DB logging fails
-    }
+    await db`
+      INSERT INTO "Notification" (
+        id, type, recipient, "recipientEmail", message, "eventId", status, "createdAt"
+      ) VALUES (
+        ${notificationId},
+        ${type},
+        ${recipient.phone || null},
+        ${recipient.email},
+        ${whatsappMessage},
+        ${event.id},
+        ${emailResult.success ? "SENT" : "FAILED"},
+        NOW()
+      )
+    `
 
     return {
-      success: emailResult?.success,
-      whatsappLink,
-      email: emailResult,
+      success: emailResult.success,
+      message: emailResult.message,
+      whatsappLink: whatsappLink,
+      notificationId,
     }
   } catch (error) {
     console.error("Error in sendFreeNotification:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
+    return { success: false, message: `Error sending notification: ${error}` }
   }
 }
 
@@ -199,20 +173,8 @@ export async function sendFreeBulkNotifications(
     successful: 0,
     failed: 0,
     details: [] as any[],
-    whatsappLinks: [] as { name: string; phone: string; link: string }[],
   }
 
-  // Generar enlaces de WhatsApp en masa si es posible
-  if (type === "reminder" || type === "custom") {
-    try {
-      const links = await generateWhatsAppLinks(event.id, customMessage)
-      results.whatsappLinks = links
-    } catch (error) {
-      console.error("Error generating bulk WhatsApp links:", error)
-    }
-  }
-
-  // Enviar notificaciones individuales
   for (const recipient of recipients) {
     try {
       const result = await sendFreeNotification(type, recipient, event, customMessage)
@@ -223,23 +185,10 @@ export async function sendFreeBulkNotifications(
         results.failed++
       }
 
-      if (result.whatsappLink && recipient.phone) {
-        // Solo añadir si no está ya en la lista
-        const exists = results.whatsappLinks.some((link) => link.phone === recipient.phone)
-        if (!exists) {
-          results.whatsappLinks.push({
-            name: recipient.name,
-            phone: recipient.phone,
-            link: result.whatsappLink,
-          })
-        }
-      }
-
       results.details.push({
         recipient: recipient.email,
         success: result.success,
         whatsappLink: result.whatsappLink,
-        emailSent: result.email?.success || false,
       })
     } catch (error) {
       console.error(`Error sending notification to ${recipient.email}:`, error)

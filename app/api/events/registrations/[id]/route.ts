@@ -63,6 +63,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
 
     const body = await request.json()
+    console.log("Datos recibidos para actualización:", body)
 
     // Validar datos requeridos
     if (!body.name || !body.email || !body.phone) {
@@ -90,21 +91,64 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       )
     }
 
-    // Actualizar el registro
-    const updatedRegistration = await db`
+    // Preparar los campos a actualizar
+    const fieldsToUpdate = {
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      numberOfAttendees: body.numberOfAttendees || 1,
+      guardianName: body.guardianName || null,
+      updatedAt: new Date(),
+    }
+
+    // Añadir campos opcionales si están presentes
+    if (body.confirmationStatus) {
+      fieldsToUpdate.confirmationStatus = body.confirmationStatus
+    }
+
+    if (body.paymentStatus) {
+      fieldsToUpdate.paymentStatus = body.paymentStatus
+    }
+
+    if (body.paymentReference) {
+      fieldsToUpdate.paymentReference = body.paymentReference
+    }
+
+    console.log("Campos a actualizar:", fieldsToUpdate)
+
+    // Construir la consulta SQL dinámicamente
+    let updateQuery = `
       UPDATE "EventRegistration" SET
         name = ${body.name},
         email = ${body.email},
         phone = ${body.phone},
         "numberOfAttendees" = ${body.numberOfAttendees || 1},
         "guardianName" = ${body.guardianName || null},
-        "confirmationStatus" = ${body.confirmationStatus || "PENDING"},
-        ${body.paymentStatus ? `"paymentStatus" = ${body.paymentStatus},` : ""}
-        ${body.paymentReference ? `"paymentReference" = ${body.paymentReference},` : ""}
         "updatedAt" = NOW()
-      WHERE id = ${registrationId}
-      RETURNING *
     `
+
+    // Añadir campos opcionales a la consulta
+    if (body.confirmationStatus) {
+      updateQuery += `, "confirmationStatus" = ${body.confirmationStatus}`
+    }
+
+    if (body.paymentStatus) {
+      updateQuery += `, "paymentStatus" = ${body.paymentStatus}`
+    }
+
+    if (body.paymentReference) {
+      updateQuery += `, "paymentReference" = ${body.paymentReference}`
+    }
+
+    // Completar la consulta
+    updateQuery += ` WHERE id = ${registrationId} RETURNING *`
+
+    console.log("Consulta SQL:", updateQuery)
+
+    // Ejecutar la consulta
+    const updatedRegistration = await db.unsafe(updateQuery)
+
+    console.log("Resultado de la actualización:", updatedRegistration)
 
     return NextResponse.json({
       success: true,

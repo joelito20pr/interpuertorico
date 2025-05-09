@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     // Verificar si existe el registro
     const registrations = await db`
-      SELECT id, "confirmationStatus" FROM "EventRegistration" 
+      SELECT id FROM "EventRegistration" 
       WHERE "eventId" = ${eventId} 
       AND email = ${email}
     `
@@ -42,33 +42,53 @@ export async function GET(request: Request, { params }: { params: { id: string }
     // Actualizar el estado de confirmación
     const confirmationStatus = confirm === "yes" ? "CONFIRMED" : "DECLINED"
 
-    // Verificar si la columna confirmationStatus existe
+    // Intentar actualizar todos los campos posibles de confirmación para asegurar compatibilidad
     try {
-      const updateResult = await db`
+      await db`
         UPDATE "EventRegistration" 
-        SET "confirmationStatus" = ${confirmationStatus}, 
-            "updatedAt" = NOW() 
+        SET 
+          "confirmationStatus" = ${confirmationStatus},
+          "paymentStatus" = ${confirmationStatus},
+          "updatedAt" = NOW() 
         WHERE id = ${registrations[0].id}
-        RETURNING id, "confirmationStatus"
       `
-      console.log("Resultado de actualización (confirmationStatus):", updateResult)
+      console.log("Registro actualizado con éxito:", registrations[0].id)
     } catch (error) {
-      console.error("Error al actualizar confirmationStatus:", error)
+      console.error("Error al actualizar ambos campos:", error)
 
-      // Intentar actualizar usando paymentStatus como alternativa
+      // Intentar actualizar solo confirmationStatus
       try {
-        const updateResult = await db`
+        await db`
           UPDATE "EventRegistration" 
-          SET "paymentStatus" = ${confirmationStatus}, 
-              "updatedAt" = NOW() 
+          SET "confirmationStatus" = ${confirmationStatus}, "updatedAt" = NOW() 
           WHERE id = ${registrations[0].id}
-          RETURNING id, "paymentStatus"
         `
-        console.log("Resultado de actualización (paymentStatus):", updateResult)
-      } catch (updateError) {
-        console.error("Error al actualizar paymentStatus:", updateError)
+        console.log("Registro actualizado con confirmationStatus:", registrations[0].id)
+      } catch (confirmError) {
+        console.error("Error al actualizar confirmationStatus:", confirmError)
+
+        // Intentar actualizar solo paymentStatus
+        try {
+          await db`
+            UPDATE "EventRegistration" 
+            SET "paymentStatus" = ${confirmationStatus}, "updatedAt" = NOW() 
+            WHERE id = ${registrations[0].id}
+          `
+          console.log("Registro actualizado con paymentStatus:", registrations[0].id)
+        } catch (paymentError) {
+          console.error("Error al actualizar paymentStatus:", paymentError)
+          throw new Error("No se pudo actualizar ningún campo de estado")
+        }
       }
     }
+
+    // Verificar que el registro se actualizó correctamente
+    const updatedRegistration = await db`
+      SELECT id, "confirmationStatus", "paymentStatus" FROM "EventRegistration" 
+      WHERE id = ${registrations[0].id}
+    `
+
+    console.log("Estado actualizado:", updatedRegistration)
 
     // Obtener información del evento para la página de confirmación
     const event = await db`
@@ -135,7 +155,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
             background-color: #f5f5f5;
             padding: 10px;
             border-radius: 5px;
-            display: none;
           }
           .show-debug {
             cursor: pointer;
@@ -183,38 +202,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
           
           <a href="https://www.interprfc.com" class="button">Volver al sitio</a>
           
-          <div class="show-debug" onclick="document.getElementById('debug-info').style.display='block';">
-            Mostrar información de depuración
-          </div>
-          
-          <div id="debug-info" class="debug-info">
+          <div class="debug-info">
+            <h4>Información de confirmación:</h4>
             <p><strong>ID del evento:</strong> ${eventId}</p>
             <p><strong>Email:</strong> ${email}</p>
             <p><strong>Confirmación:</strong> ${confirm}</p>
             <p><strong>Estado de confirmación:</strong> ${confirmationStatus}</p>
             <p><strong>ID del registro:</strong> ${registrations[0]?.id || "No encontrado"}</p>
+            <p><strong>Estado actualizado:</strong> ${
+              updatedRegistration.length > 0
+                ? `confirmationStatus: ${updatedRegistration[0].confirmationStatus || "N/A"}, paymentStatus: ${
+                    updatedRegistration[0].paymentStatus || "N/A"
+                  }`
+                : "No se pudo verificar"
+            }</p>
             <p><strong>Fecha y hora:</strong> ${new Date().toISOString()}</p>
           </div>
         </div>
-        
-        <script>
-          // Enviar información de confirmación al servidor para verificar
-          fetch('/api/debug/confirm-status?id=${registrations[0]?.id || ""}&eventId=${eventId}&email=${email}')
-            .then(response => response.json())
-            .then(data => {
-              console.log('Estado de confirmación:', data);
-              if (data.success) {
-                // Actualización exitosa
-              } else {
-                // Mostrar mensaje de error
-                document.getElementById('debug-info').style.display = 'block';
-              }
-            })
-            .catch(error => {
-              console.error('Error al verificar confirmación:', error);
-              document.getElementById('debug-info').style.display = 'block';
-            });
-        </script>
       </body>
       </html>
     `
