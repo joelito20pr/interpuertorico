@@ -89,3 +89,5 @@ export function generateWhatsAppLink(phone: string, message: string): string {
   // Generar el enlace
   return `https://wa.me/${formattedPhone.replace("+", "")}?text=${encodedMessage}`
 }
+
+export const getBaseUrl = () => process.env.NEXT_PUBLIC_APP_URL || "https://www.interprfc.com"
