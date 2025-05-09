@@ -39,18 +39,21 @@ export async function POST(request: Request) {
     // Generate registration ID
     const registrationId = `reg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
-    // Insert registration
+    // Insert registration using the correct column names
     await db`
       INSERT INTO "EventRegistration" (
-        id, "eventId", name, email, phone, "registrationDate", status
+        id, "eventId", name, email, phone, "guardianName", "createdAt", "updatedAt", "numberOfAttendees", "paymentStatus"
       ) VALUES (
         ${registrationId},
         ${body.eventId},
         ${body.name},
         ${body.email},
         ${body.phone || null},
+        ${body.guardianName || null},
         NOW(),
-        'REGISTERED'
+        NOW(),
+        ${body.numberOfAttendees || 1},
+        'PENDING'
       )
     `
 
