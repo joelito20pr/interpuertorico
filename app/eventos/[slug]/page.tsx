@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Calendar, Clock, MapPin, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw } from "lucide-react"
+import { Calendar, Clock, MapPin, AlertCircle, CheckCircle2, ArrowLeft, RefreshCw, Bug } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { LocationDisplay } from "@/components/location-display"
 
@@ -23,6 +23,8 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
   const [success, setSuccess] = useState<string | null>(null)
   const [event, setEvent] = useState<any>(null)
   const [registrationCount, setRegistrationCount] = useState(0)
+  const [diagnosticMode, setDiagnosticMode] = useState(false)
+  const [apiResponse, setApiResponse] = useState<any>(null)
   const [formData, setFormData] = useState({
     name: "",
     guardianName: "",
@@ -35,10 +37,25 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
     setIsLoading(true)
     setError(null)
     setDebugInfo(null)
+    setApiResponse(null)
 
     try {
       console.log("Fetching event with slug:", params.slug)
       const response = await fetch(`/api/events/slug/${params.slug}`)
+
+      // Store the raw response for debugging
+      let responseText
+      try {
+        responseText = await response.clone().text()
+        setApiResponse({
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText.substring(0, 500) + (responseText.length > 500 ? "..." : ""),
+        })
+      } catch (e) {
+        console.error("Error cloning response:", e)
+      }
 
       if (!response.ok) {
         console.error("API response not OK:", response.status)
@@ -82,9 +99,12 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
     setIsSubmitting(true)
     setError(null)
     setSuccess(null)
+    setApiResponse(null)
 
     try {
-      const response = await fetch("/api/events/register", {
+      // Try the new registration endpoint first
+      console.log("Submitting registration to new endpoint...")
+      const response = await fetch("/api/register-event", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -94,6 +114,21 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
           eventId: event.id,
         }),
       })
+
+      // Store the raw response for debugging
+      let responseText
+      try {
+        responseText = await response.clone().text()
+        setApiResponse({
+          endpoint: "/api/register-event",
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText.substring(0, 500) + (responseText.length > 500 ? "..." : ""),
+        })
+      } catch (e) {
+        console.error("Error cloning response:", e)
+      }
 
       const result = await response.json()
 
@@ -110,12 +145,28 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
         setRegistrationCount((prev) => prev + 1)
       } else {
         setError(result.error || "Error al procesar el registro")
+        setDebugInfo(result.debug || null)
       }
     } catch (error) {
       console.error("Error submitting registration:", error)
       setError(`Error al procesar el registro: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const toggleDiagnosticMode = () => {
+    setDiagnosticMode(!diagnosticMode)
+  }
+
+  const runDiagnostics = async () => {
+    try {
+      const response = await fetch(`/api/debug/event-diagnosis?slug=${params.slug}`)
+      const data = await response.json()
+      setDebugInfo(data)
+    } catch (error) {
+      console.error("Error running diagnostics:", error)
+      setDebugInfo({ error: String(error) })
     }
   }
 
@@ -144,12 +195,43 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
 
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle>Información de depuración</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Información de depuración</span>
+              <Button variant="outline" size="sm" onClick={toggleDiagnosticMode}>
+                <Bug className="h-4 w-4 mr-2" />
+                {diagnosticMode ? "Ocultar diagnóstico" : "Mostrar diagnóstico"}
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-2">
               Slug solicitado: <code>{params.slug}</code>
             </p>
+
+            {diagnosticMode && (
+              <>
+                <div className="mt-4">
+                  <Button variant="outline" size="sm" onClick={runDiagnostics} className="mb-4">
+                    <Bug className="h-4 w-4 mr-2" />
+                    Ejecutar diagnóstico completo
+                  </Button>
+
+                  {apiResponse && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-md overflow-auto">
+                      <h3 className="text-sm font-medium mb-2">Respuesta API:</h3>
+                      <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(apiResponse, null, 2)}</pre>
+                    </div>
+                  )}
+
+                  {debugInfo && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-md overflow-auto">
+                      <h3 className="text-sm font-medium mb-2">Información de diagnóstico:</h3>
+                      <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {debugInfo && debugInfo.availableSlugs && debugInfo.availableSlugs.length > 0 && (
               <div className="mt-4">
@@ -178,9 +260,9 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Herramientas de diagnóstico:</p>
           <div className="flex flex-wrap gap-2">
-            <Link href="/api/debug/check-slug?slug=torneo-prueba-265" passHref>
+            <Link href={`/api/debug/event-diagnosis?slug=${params.slug}`} passHref>
               <Button variant="outline" size="sm">
-                Verificar slugs
+                Diagnosticar evento
               </Button>
             </Link>
             <Link href="/api/events/regenerate-all-slugs" passHref>
@@ -191,6 +273,11 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
             <Link href="/api/debug/list-events" passHref>
               <Button variant="outline" size="sm">
                 Listar eventos
+              </Button>
+            </Link>
+            <Link href="/api/test" passHref>
+              <Button variant="outline" size="sm">
+                Probar API
               </Button>
             </Link>
           </div>
@@ -228,12 +315,67 @@ export default function EventoPublicoPage({ params }: { params: { slug: string }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <div className="mb-6">
+      <div className="mb-6 flex justify-between items-center">
         <Link href="/" className="inline-flex items-center text-blue-600 hover:underline">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Volver al inicio
         </Link>
+
+        <Button variant="ghost" size="sm" onClick={toggleDiagnosticMode}>
+          <Bug className="h-4 w-4 mr-2" />
+          {diagnosticMode ? "Ocultar diagnóstico" : "Diagnóstico"}
+        </Button>
       </div>
+
+      {diagnosticMode && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Modo diagnóstico</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Información del evento:</h3>
+                <pre className="text-xs bg-gray-50 p-2 rounded-md overflow-auto">{JSON.stringify(event, null, 2)}</pre>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={runDiagnostics}>
+                  Ejecutar diagnóstico completo
+                </Button>
+                <Link href={`/api/debug/event-diagnosis?slug=${params.slug}`} passHref>
+                  <Button variant="outline" size="sm">
+                    Ver diagnóstico en JSON
+                  </Button>
+                </Link>
+                <Link href="/api/test" passHref>
+                  <Button variant="outline" size="sm">
+                    Probar API
+                  </Button>
+                </Link>
+              </div>
+
+              {apiResponse && (
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Última respuesta API:</h3>
+                  <pre className="text-xs bg-gray-50 p-2 rounded-md overflow-auto">
+                    {JSON.stringify(apiResponse, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {debugInfo && (
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Información de diagnóstico:</h3>
+                  <pre className="text-xs bg-gray-50 p-2 rounded-md overflow-auto">
+                    {JSON.stringify(debugInfo, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-6">
         <Card>
