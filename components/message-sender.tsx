@@ -16,8 +16,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MessageSquare, Users, User, Mail, Send } from "lucide-react"
+import { MessageSquare, Users, User, Mail, Send, Search } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 
 interface MessageSenderProps {
   eventId: string
@@ -29,6 +30,8 @@ interface MessageSenderProps {
   variant?: "outline" | "default" | "secondary" | "destructive" | "ghost" | "link"
   size?: "default" | "sm" | "lg" | "icon"
   className?: string
+  initialMode?: "group" | "individual"
+  preSelectedRecipients?: string[]
 }
 
 export function MessageSender({
@@ -41,17 +44,21 @@ export function MessageSender({
   variant = "outline",
   size = "default",
   className = "",
+  initialMode = "group",
+  preSelectedRecipients = [],
 }: MessageSenderProps) {
   const { toast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [message, setMessage] = useState("")
   const [subject, setSubject] = useState(`Información importante: ${eventTitle}`)
-  const [messageType, setMessageType] = useState<"group" | "individual">("group")
-  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
+  const [messageType, setMessageType] = useState<"group" | "individual">(initialMode)
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>(preSelectedRecipients)
   const [sendVia, setSendVia] = useState<"email" | "whatsapp" | "both">("both")
   const [isLoadingRegistrations, setIsLoadingRegistrations] = useState(false)
   const [allRegistrations, setAllRegistrations] = useState<any[]>(registrations || [])
+  const [recipientSearchTerm, setRecipientSearchTerm] = useState("")
+  const [filteredRecipients, setFilteredRecipients] = useState<any[]>([])
 
   // Cargar registros si no se proporcionan
   useEffect(() => {
@@ -88,11 +95,28 @@ export function MessageSender({
     }
   }, [eventId, registrations, toast])
 
+  // Filtrar destinatarios según el término de búsqueda
+  useEffect(() => {
+    if (recipientSearchTerm.trim() === "") {
+      setFilteredRecipients(allRegistrations)
+    } else {
+      const lowercasedSearch = recipientSearchTerm.toLowerCase()
+      const filtered = allRegistrations.filter(
+        (reg) =>
+          reg.name.toLowerCase().includes(lowercasedSearch) ||
+          (reg.guardianName && reg.guardianName.toLowerCase().includes(lowercasedSearch)) ||
+          reg.email.toLowerCase().includes(lowercasedSearch) ||
+          (reg.phone && reg.phone.toLowerCase().includes(lowercasedSearch)),
+      )
+      setFilteredRecipients(filtered)
+    }
+  }, [recipientSearchTerm, allRegistrations])
+
   const handleSelectAll = () => {
-    if (selectedRecipients.length === allRegistrations.length) {
+    if (selectedRecipients.length === filteredRecipients.length) {
       setSelectedRecipients([])
     } else {
-      setSelectedRecipients(allRegistrations.map((reg) => reg.id))
+      setSelectedRecipients(filteredRecipients.map((reg) => reg.id))
     }
   }
 
@@ -192,12 +216,29 @@ export function MessageSender({
     }
   }
 
+  // Obtener nombres de los destinatarios seleccionados
+  const getSelectedRecipientsNames = () => {
+    return allRegistrations
+      .filter((reg) => selectedRecipients.includes(reg.id))
+      .map((reg) => reg.guardianName || reg.name)
+      .join(", ")
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant={variant} size={size} className={className} disabled={allRegistrations.length === 0}>
-          <MessageSquare className="h-4 w-4 mr-2" />
-          Enviar mensaje
+          {messageType === "group" ? (
+            <>
+              <Users className="h-4 w-4 mr-2" />
+              Mensaje grupal
+            </>
+          ) : (
+            <>
+              <User className="h-4 w-4 mr-2" />
+              Mensaje individual
+            </>
+          )}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
@@ -208,7 +249,7 @@ export function MessageSender({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="group" onValueChange={(value) => setMessageType(value as "group" | "individual")}>
+        <Tabs defaultValue={initialMode} onValueChange={(value) => setMessageType(value as "group" | "individual")}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="group">
               <Users className="h-4 w-4 mr-2" />
@@ -221,18 +262,38 @@ export function MessageSender({
           </TabsList>
 
           <TabsContent value="group" className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Este mensaje se enviará a todos los participantes registrados ({allRegistrations.length}).
-            </p>
+            <div className="bg-muted p-3 rounded-md">
+              <p className="text-sm">
+                Este mensaje se enviará a todos los participantes registrados ({allRegistrations.length}).
+              </p>
+            </div>
           </TabsContent>
 
           <TabsContent value="individual" className="space-y-4 mt-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">Seleccionar destinatarios</h4>
-                <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                  {selectedRecipients.length === allRegistrations.length ? "Deseleccionar todos" : "Seleccionar todos"}
-                </Button>
+                <div className="flex space-x-2">
+                  <Badge variant="outline" className="ml-2">
+                    {selectedRecipients.length} seleccionados
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                    {selectedRecipients.length === filteredRecipients.length
+                      ? "Deseleccionar todos"
+                      : "Seleccionar todos"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Buscar destinatarios..."
+                  className="pl-8"
+                  value={recipientSearchTerm}
+                  onChange={(e) => setRecipientSearchTerm(e.target.value)}
+                />
               </div>
 
               {isLoadingRegistrations ? (
@@ -241,12 +302,19 @@ export function MessageSender({
                 </div>
               ) : (
                 <div className="max-h-[200px] overflow-y-auto border rounded-md p-2">
-                  {allRegistrations.length === 0 ? (
-                    <p className="text-center py-4 text-muted-foreground">No hay participantes registrados.</p>
+                  {filteredRecipients.length === 0 ? (
+                    <p className="text-center py-4 text-muted-foreground">
+                      {allRegistrations.length === 0
+                        ? "No hay participantes registrados."
+                        : "No se encontraron resultados para la búsqueda."}
+                    </p>
                   ) : (
                     <div className="space-y-2">
-                      {allRegistrations.map((registration) => (
-                        <div key={registration.id} className="flex items-center space-x-2">
+                      {filteredRecipients.map((registration) => (
+                        <div
+                          key={registration.id}
+                          className="flex items-center space-x-2 p-1 hover:bg-muted rounded-md"
+                        >
                           <Checkbox
                             id={`recipient-${registration.id}`}
                             checked={selectedRecipients.includes(registration.id)}
@@ -256,13 +324,15 @@ export function MessageSender({
                             htmlFor={`recipient-${registration.id}`}
                             className="text-sm flex-1 cursor-pointer flex items-center justify-between"
                           >
-                            <span>
-                              {registration.name}
-                              {registration.guardianName ? ` (${registration.guardianName})` : ""}
-                            </span>
+                            <div>
+                              <span className="font-medium">{registration.name}</span>
+                              {registration.guardianName && (
+                                <span className="text-muted-foreground ml-1">({registration.guardianName})</span>
+                              )}
+                            </div>
                             <div className="flex items-center space-x-2 text-muted-foreground">
-                              {registration.email && <Mail className="h-3 w-3" />}
-                              {registration.phone && <MessageSquare className="h-3 w-3" />}
+                              {registration.email && <Mail className="h-3 w-3" title={registration.email} />}
+                              {registration.phone && <MessageSquare className="h-3 w-3" title={registration.phone} />}
                             </div>
                           </label>
                         </div>
@@ -272,9 +342,11 @@ export function MessageSender({
                 </div>
               )}
 
-              <p className="text-xs text-muted-foreground mt-2">
-                Seleccionados: {selectedRecipients.length} de {allRegistrations.length}
-              </p>
+              {selectedRecipients.length > 0 && (
+                <div className="bg-muted p-2 rounded-md text-xs">
+                  <strong>Destinatarios seleccionados:</strong> {getSelectedRecipientsNames()}
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

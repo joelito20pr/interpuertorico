@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw, Trash2 } from "lucide-react"
+import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw, Trash2, User } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { SendReminderButton } from "@/components/send-reminder-button"
-import { SendCustomMessage } from "@/components/send-custom-message"
 import { RegistrationEditor } from "@/components/registration-editor"
+import { MessageSender } from "@/components/message-sender"
+import { SendIndividualMessage } from "@/components/send-individual-message"
 
 export default function RegistrosEventoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -274,13 +275,32 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                 <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                 Actualizar
               </Button>
-              <SendCustomMessage
+
+              {/* Botón para mensaje grupal */}
+              <MessageSender
                 eventId={params.id}
                 eventTitle={event.title}
                 eventDate={event.date}
                 eventLocation={event.location}
-                registrationCount={registrations.length}
+                registrations={registrations}
+                initialMode="group"
+                variant="outline"
               />
+
+              {/* Botón para mensaje individual */}
+              <MessageSender
+                eventId={params.id}
+                eventTitle={event.title}
+                eventDate={event.date}
+                eventLocation={event.location}
+                registrations={registrations}
+                initialMode="individual"
+                variant="outline"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Mensaje individual
+              </MessageSender>
+
               <SendReminderButton
                 eventId={params.id}
                 eventTitle={event.title}
@@ -373,6 +393,14 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                             <TableCell>{formatDate(registration.createdAt)}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-1">
+                                <SendIndividualMessage
+                                  eventId={params.id}
+                                  eventTitle={event.title}
+                                  eventDate={event.date}
+                                  eventLocation={event.location}
+                                  recipient={registration}
+                                  onSuccess={handleRefresh}
+                                />
                                 <Button
                                   variant="ghost"
                                   size="sm"
