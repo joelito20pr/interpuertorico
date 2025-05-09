@@ -68,6 +68,9 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
     setIsLoading(true)
 
     try {
+      // Log the data being sent
+      console.log("Sending data to API:", formData)
+
       const response = await fetch(`/api/events/registrations/${registration.id}`, {
         method: "PUT",
         headers: {
@@ -76,12 +79,17 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
         body: JSON.stringify(formData),
       })
 
+      // Log the response status
+      console.log("API response status:", response.status)
+
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("API error response:", errorData)
         throw new Error(errorData.message || "Error al actualizar el registro")
       }
 
       const result = await response.json()
+      console.log("API success response:", result)
 
       if (!result.success) {
         throw new Error(result.error || "Error al actualizar el registro")
@@ -92,8 +100,8 @@ export function RegistrationEditor({ registration, onSave, onCancel }: Registrat
         description: "La información del registro ha sido actualizada correctamente.",
       })
 
-      // Llamar a onSave con los datos actualizados
-      onSave(formData)
+      // Call onSave with the updated data from the API response
+      onSave(result.data)
     } catch (error) {
       console.error("Error updating registration:", error)
       toast({

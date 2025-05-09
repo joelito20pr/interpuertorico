@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw } from "lucide-react"
+import { ArrowLeft, Download, Search, Users, Calendar, MapPin, Edit, RefreshCw, Trash2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { SendReminderButton } from "@/components/send-reminder-button"
 import { SendCustomMessage } from "@/components/send-custom-message"
@@ -24,9 +24,9 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
   const [editingRegistration, setEditingRegistration] = useState<any>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      setIsLoading(true)
+      setIsRefreshing(true)
       // Cargar información del evento
       const eventResponse = await fetch(`/api/events/${params.id}`)
       if (!eventResponse.ok) {
@@ -52,6 +52,7 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
         throw new Error(registrationsResult.error || "Error al cargar los registros")
       }
 
+      console.log("Registrations loaded:", registrationsResult.data.registrations)
       setRegistrations(registrationsResult.data.registrations)
       setFilteredRegistrations(registrationsResult.data.registrations)
     } catch (error) {
@@ -65,11 +66,11 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [params.id, toast])
 
   useEffect(() => {
     loadData()
-  }, [params.id, toast])
+  }, [loadData])
 
   useEffect(() => {
     if (searchTerm.trim() === "") {
@@ -116,7 +117,7 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
           `"${reg.email}"`,
           `"${reg.phone || ""}"`,
           reg.numberOfAttendees,
-          reg.paymentStatus,
+          reg.confirmationStatus || "PENDING",
           formatDate(reg.createdAt),
         ].join(","),
       ),
@@ -150,17 +151,40 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
   }
 
   const handleEditRegistration = (registration: any) => {
+    console.log("Editing registration:", registration)
     setEditingRegistration(registration)
   }
 
-  const handleSaveRegistration = async (updatedRegistration: any) => {
+  const handleSaveRegistration = (updatedRegistration: any) => {
+    console.log("Saving updated registration:", updatedRegistration)
+
+    // Update the registrations array with the updated registration
+    setRegistrations((prevRegistrations) => {
+      const newRegistrations = prevRegistrations.map((reg) =>
+        reg.id === updatedRegistration.id ? updatedRegistration : reg,
+      )
+      console.log("Updated registrations array:", newRegistrations)
+      return newRegistrations
+    })
+
+    // Close the editor
+    setEditingRegistration(null)
+
+    // Show success message
+    toast({
+      title: "Registro actualizado",
+      description: "La información del registro ha sido actualizada correctamente.",
+    })
+  }
+
+  const handleDeleteRegistration = async (registrationId: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.")) {
+      return
+    }
+
     try {
-      const response = await fetch(`/api/events/registrations/${updatedRegistration.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedRegistration),
+      const response = await fetch(`/api/events/registrations/${registrationId}`, {
+        method: "DELETE",
       })
 
       if (!response.ok) {
@@ -170,33 +194,27 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
       const result = await response.json()
 
       if (!result.success) {
-        throw new Error(result.error || "Error al actualizar el registro")
+        throw new Error(result.error || "Error al eliminar el registro")
       }
 
       toast({
-        title: "Registro actualizado",
-        description: "La información del registro ha sido actualizada correctamente.",
+        title: "Registro eliminado",
+        description: "El registro ha sido eliminado correctamente.",
       })
 
-      // Actualizar la lista de registros
-      setRegistrations((prevRegistrations) =>
-        prevRegistrations.map((reg) => (reg.id === updatedRegistration.id ? updatedRegistration : reg)),
-      )
-
-      // Cerrar el editor
-      setEditingRegistration(null)
+      // Remove the deleted registration from the list
+      setRegistrations((prevRegistrations) => prevRegistrations.filter((reg) => reg.id !== registrationId))
     } catch (error) {
-      console.error("Error updating registration:", error)
+      console.error("Error deleting registration:", error)
       toast({
         title: "Error",
-        description: `Error al actualizar el registro: ${error instanceof Error ? error.message : String(error)}`,
+        description: `Error al eliminar el registro: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       })
     }
   }
 
   const handleRefresh = () => {
-    setIsRefreshing(true)
     loadData()
   }
 
@@ -354,14 +372,24 @@ export default function RegistrosEventoPage({ params }: { params: { id: string }
                             </TableCell>
                             <TableCell>{formatDate(registration.createdAt)}</TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditRegistration(registration)}
-                                title="Editar registro"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <div className="flex justify-end space-x-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditRegistration(registration)}
+                                  title="Editar registro"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteRegistration(registration.id)}
+                                  title="Eliminar registro"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )

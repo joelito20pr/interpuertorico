@@ -42,15 +42,33 @@ export async function GET(request: Request, { params }: { params: { id: string }
     // Actualizar el estado de confirmación
     const confirmationStatus = confirm === "yes" ? "CONFIRMED" : "DECLINED"
 
-    const updateResult = await db`
-      UPDATE "EventRegistration" 
-      SET "confirmationStatus" = ${confirmationStatus}, 
-          "updatedAt" = NOW() 
-      WHERE id = ${registrations[0].id}
-      RETURNING id, "confirmationStatus"
-    `
+    // Verificar si la columna confirmationStatus existe
+    try {
+      const updateResult = await db`
+        UPDATE "EventRegistration" 
+        SET "confirmationStatus" = ${confirmationStatus}, 
+            "updatedAt" = NOW() 
+        WHERE id = ${registrations[0].id}
+        RETURNING id, "confirmationStatus"
+      `
+      console.log("Resultado de actualización (confirmationStatus):", updateResult)
+    } catch (error) {
+      console.error("Error al actualizar confirmationStatus:", error)
 
-    console.log("Resultado de actualización:", updateResult)
+      // Intentar actualizar usando paymentStatus como alternativa
+      try {
+        const updateResult = await db`
+          UPDATE "EventRegistration" 
+          SET "paymentStatus" = ${confirmationStatus}, 
+              "updatedAt" = NOW() 
+          WHERE id = ${registrations[0].id}
+          RETURNING id, "paymentStatus"
+        `
+        console.log("Resultado de actualización (paymentStatus):", updateResult)
+      } catch (updateError) {
+        console.error("Error al actualizar paymentStatus:", updateError)
+      }
+    }
 
     // Obtener información del evento para la página de confirmación
     const event = await db`
@@ -109,6 +127,24 @@ export async function GET(request: Request, { params }: { params: { id: string }
             margin-top: 20px;
             font-weight: bold;
           }
+          .debug-info {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+            text-align: left;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+          }
+          .show-debug {
+            cursor: pointer;
+            color: #0066cc;
+            text-decoration: underline;
+            font-size: 12px;
+            margin-top: 20px;
+            display: inline-block;
+          }
         </style>
       </head>
       <body>
@@ -146,7 +182,39 @@ export async function GET(request: Request, { params }: { params: { id: string }
           }
           
           <a href="https://www.interprfc.com" class="button">Volver al sitio</a>
+          
+          <div class="show-debug" onclick="document.getElementById('debug-info').style.display='block';">
+            Mostrar información de depuración
+          </div>
+          
+          <div id="debug-info" class="debug-info">
+            <p><strong>ID del evento:</strong> ${eventId}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Confirmación:</strong> ${confirm}</p>
+            <p><strong>Estado de confirmación:</strong> ${confirmationStatus}</p>
+            <p><strong>ID del registro:</strong> ${registrations[0]?.id || "No encontrado"}</p>
+            <p><strong>Fecha y hora:</strong> ${new Date().toISOString()}</p>
+          </div>
         </div>
+        
+        <script>
+          // Enviar información de confirmación al servidor para verificar
+          fetch('/api/debug/confirm-status?id=${registrations[0]?.id || ""}&eventId=${eventId}&email=${email}')
+            .then(response => response.json())
+            .then(data => {
+              console.log('Estado de confirmación:', data);
+              if (data.success) {
+                // Actualización exitosa
+              } else {
+                // Mostrar mensaje de error
+                document.getElementById('debug-info').style.display = 'block';
+              }
+            })
+            .catch(error => {
+              console.error('Error al verificar confirmación:', error);
+              document.getElementById('debug-info').style.display = 'block';
+            });
+        </script>
       </body>
       </html>
     `
